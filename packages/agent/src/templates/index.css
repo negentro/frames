@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/*
+ * Base dark theme styles for generated projects.
+ * Tailwind v4 uses CSS-based configuration, so theme
+ * customizations go here or in a dedicated theme file.
+ */
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-neutral-950 text-neutral-100 antialiased;
+  font-family: system-ui, -apple-system, sans-serif;
+}

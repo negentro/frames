@@ -1,0 +1,15 @@
+name = "eigen-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# [[r2_buckets]]
+# binding = "ASSETS"
+# bucket_name = "eigen-assets"
+
+# [[d1_databases]]
+# binding = "DB"
+# database_name = "eigen-db"
+# database_id = ""
+
+# [containers]
+# binding = "CONTAINER"
