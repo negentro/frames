@@ -2,14 +2,19 @@ name = "eigen-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
-# [[r2_buckets]]
-# binding = "ASSETS"
-# bucket_name = "eigen-assets"
+[[r2_buckets]]
+binding = "ASSETS"
+bucket_name = "eigen-assets"
+preview_bucket_name = "eigen-assets-preview"
 
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "eigen-db"
-# database_id = ""
+[[d1_databases]]
+binding = "DB"
+database_name = "eigen-db"
+database_id = "local"
 
 # [containers]
-# binding = "CONTAINER"
+# binding = "AGENT"
+# image = "./packages/agent"
+
+[vars]
+AGENT_URL = "http://localhost:8787"

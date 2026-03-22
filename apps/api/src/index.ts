@@ -1,17 +1,20 @@
 import { Hono } from "hono";
+import { cors } from "hono/cors";
+import type { App } from "./types";
 import { projects } from "./routes/projects";
 import { generate } from "./routes/generate";
 import { preview } from "./routes/preview";
 
-type Bindings = {
-  // R2Bucket for storing built assets and uploaded images
-  // ASSETS: R2Bucket;
+const app = new Hono<App>();
 
-  // D1 database for project metadata
-  // DB: D1Database;
-};
-
-const app = new Hono<{ Bindings: Bindings }>();
+app.use(
+  "/api/*",
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:5174"],
+    allowMethods: ["GET", "POST", "PUT", "DELETE"],
+    allowHeaders: ["Content-Type"],
+  })
+);
 
 app.get("/api/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
