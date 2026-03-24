@@ -31,6 +31,12 @@ export interface Build {
   created_at: string;
 }
 
+export interface ProjectMessage {
+  role: string;
+  content: string;
+  created_at: string;
+}
+
 export interface ProjectDetail extends Project {
   builds: Build[];
   usage: {
@@ -38,6 +44,7 @@ export interface ProjectDetail extends Project {
     total_output_tokens: number;
     total_cost_usd: number;
   } | null;
+  messages: ProjectMessage[];
 }
 
 export const api = {
@@ -53,6 +60,11 @@ export const api = {
     delete: (id: string) =>
       request<{ id: string; deleted: boolean }>(`/api/projects/${id}`, {
         method: "DELETE",
+      }),
+    addMessage: (id: string, role: string, content: string) =>
+      request<{ ok: boolean }>(`/api/projects/${id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ role, content }),
       }),
   },
   generate: {

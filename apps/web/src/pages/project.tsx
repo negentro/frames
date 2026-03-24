@@ -29,7 +29,7 @@ export function ProjectPage() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const generationStarted = useRef(false);
 
-  // Fetch project data
+  // Fetch project data and load persisted messages
   useEffect(() => {
     if (!id) return;
     setLoading(true);
@@ -37,6 +37,15 @@ export function ProjectPage() {
       .get(id)
       .then((p) => {
         setProject(p);
+        if (p.messages?.length > 0) {
+          setMessages(
+            p.messages.map((m) => ({
+              role: m.role as "user" | "system",
+              content: m.content,
+              timestamp: new Date(m.created_at),
+            })),
+          );
+        }
         setLoading(false);
       })
       .catch(() => {
@@ -66,52 +75,42 @@ export function ProjectPage() {
     }
   }, [status.phase, id]);
 
+  const addMessage = useCallback(
+    (role: "user" | "system", content: string) => {
+      setMessages((prev) => {
+        if (prev.at(-1)?.content === content && prev.at(-1)?.role === role) {
+          return prev;
+        }
+        return [...prev, { role, content, timestamp: new Date() }];
+      });
+      if (id) {
+        api.projects.addMessage(id, role, content).catch(() => {});
+      }
+    },
+    [id],
+  );
+
   // Add agent status messages to chat
   useEffect(() => {
     if (status.messages.length > 0) {
       const latest = status.messages.at(-1)!;
-      setMessages((prev) => {
-        if (
-          prev.at(-1)?.content === latest &&
-          prev.at(-1)?.role === "system"
-        ) {
-          return prev;
-        }
-        return [
-          ...prev,
-          { role: "system", content: latest, timestamp: new Date() },
-        ];
-      });
+      addMessage("system", latest);
     }
-  }, [status.messages]);
+  }, [status.messages, addMessage]);
 
   // Add error to chat
   useEffect(() => {
     if (status.phase === "error" && status.error) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "system",
-          content: `Error: ${status.error}`,
-          timestamp: new Date(),
-        },
-      ]);
+      addMessage("system", `Error: ${status.error}`);
     }
-  }, [status.phase, status.error]);
+  }, [status.phase, status.error, addMessage]);
 
   // Add completion to chat
   useEffect(() => {
     if (status.phase === "complete") {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "system",
-          content: "Generation complete. Preview updated.",
-          timestamp: new Date(),
-        },
-      ]);
+      addMessage("system", "Generation complete. Preview updated.");
     }
-  }, [status.phase]);
+  }, [status.phase, addMessage]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -123,10 +122,7 @@ export function ProjectPage() {
 
     const instruction = input.trim();
     setInput("");
-    setMessages((prev) => [
-      ...prev,
-      { role: "user", content: instruction, timestamp: new Date() },
-    ]);
+    addMessage("user", instruction);
     iterate(id, instruction);
   }, [input, id, status.phase, iterate]);
 

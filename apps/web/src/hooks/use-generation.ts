@@ -32,24 +32,27 @@ export function useGeneration() {
       const data = JSON.parse(event.data);
 
       switch (event.event) {
-        case "status":
-          setStatus((prev) => ({
-            ...prev,
-            messages: [...prev.messages, data.message || event.data],
-          }));
-          break;
-
-        case "assistant": {
-          const text: string = data.message || event.data;
-          // Skip raw JSON tool-call dumps — only show human-readable text
-          if (text && !text.trimStart().startsWith("{") && !text.trimStart().startsWith("[")) {
+        case "status": {
+          const msg: string = data.message || event.data;
+          // Only show high-level status messages, not tool calls
+          const isToolCall =
+            msg.startsWith("Write:") ||
+            msg.startsWith("Read:") ||
+            msg.startsWith("Edit:") ||
+            msg.startsWith("Bash:") ||
+            msg.startsWith("Ollama:");
+          if (!isToolCall) {
             setStatus((prev) => ({
               ...prev,
-              messages: [...prev.messages, text],
+              messages: [...prev.messages, msg],
             }));
           }
           break;
         }
+
+        case "assistant":
+          // Suppress model output from chat — only status messages shown
+          break;
 
         case "usage":
           setStatus((prev) => ({

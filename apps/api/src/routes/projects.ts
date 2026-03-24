@@ -55,7 +55,27 @@ projects.get("/:id", async (c) => {
     .bind(id)
     .first<{ total_input_tokens: number; total_output_tokens: number; total_cost_usd: number }>();
 
-  return c.json({ ...project, builds: builds.results, usage });
+  const messages = await c.env.DB.prepare(
+    "SELECT role, content, created_at FROM messages WHERE project_id = ? ORDER BY created_at ASC, id ASC"
+  )
+    .bind(id)
+    .all<{ role: string; content: string; created_at: string }>();
+
+  return c.json({ ...project, builds: builds.results, usage, messages: messages.results });
+});
+
+// Add a message to a project
+projects.post("/:id/messages", async (c) => {
+  const { id } = c.req.param();
+  const body = await c.req.json<{ role: string; content: string }>();
+
+  await c.env.DB.prepare(
+    "INSERT INTO messages (project_id, role, content) VALUES (?, ?, ?)"
+  )
+    .bind(id, body.role, body.content)
+    .run();
+
+  return c.json({ ok: true });
 });
 
 // Delete a project by ID
