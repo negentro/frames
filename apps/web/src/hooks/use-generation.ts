@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from "react";
-import { streamGenerate, streamIterate, type SSEEvent } from "../lib/api";
+import { api, streamFromAgent, type SSEEvent } from "../lib/api";
 
 export interface GenerationStatus {
   phase: "idle" | "generating" | "complete" | "error";
@@ -32,14 +32,6 @@ export function useGeneration() {
       const data = JSON.parse(event.data);
 
       switch (event.event) {
-        case "init":
-          setStatus((prev) => ({
-            ...prev,
-            projectId: data.projectId,
-            buildId: data.buildId,
-          }));
-          break;
-
         case "status":
           setStatus((prev) => ({
             ...prev,
@@ -47,24 +39,34 @@ export function useGeneration() {
           }));
           break;
 
+        case "assistant": {
+          const text: string = data.message || event.data;
+          // Skip raw JSON tool-call dumps — only show human-readable text
+          if (text && !text.trimStart().startsWith("{") && !text.trimStart().startsWith("[")) {
+            setStatus((prev) => ({
+              ...prev,
+              messages: [...prev.messages, text],
+            }));
+          }
+          break;
+        }
+
         case "usage":
           setStatus((prev) => ({
             ...prev,
             usage: {
-              input_tokens: prev.usage.input_tokens + (data.input_tokens || 0),
-              output_tokens: prev.usage.output_tokens + (data.output_tokens || 0),
+              input_tokens:
+                prev.usage.input_tokens + (data.input_tokens || 0),
+              output_tokens:
+                prev.usage.output_tokens + (data.output_tokens || 0),
               cost_usd: prev.usage.cost_usd + (data.cost_usd || 0),
             },
           }));
           break;
 
         case "complete":
-          setStatus((prev) => ({
-            ...prev,
-            phase: "complete",
-            projectId: data.projectId || prev.projectId,
-            buildId: data.buildId || prev.buildId,
-          }));
+          // Don't set phase here — let the onDone callback handle it
+          // after the DB has been updated via api.generate.complete()
           break;
 
         case "error":
@@ -76,7 +78,6 @@ export function useGeneration() {
           break;
       }
     } catch {
-      // Non-JSON status message
       setStatus((prev) => ({
         ...prev,
         messages: [...prev.messages, event.data],
@@ -84,25 +85,71 @@ export function useGeneration() {
     }
   }, []);
 
-  const handleError = useCallback((err: Error) => {
-    setStatus((prev) => ({
-      ...prev,
-      phase: "error",
-      error: err.message,
-    }));
-  }, []);
+  // Start streaming from the agent. DB records must already exist.
+  const startStream = useCallback(
+    (
+      projectId: string,
+      buildId: string,
+      agentEndpoint: string,
+      agentBody: Record<string, unknown>,
+    ) => {
+      controllerRef.current = streamFromAgent(
+        agentEndpoint,
+        agentBody,
+        handleEvent,
+        async (err) => {
+          setStatus((prev) => ({
+            ...prev,
+            phase: "error",
+            error: err.message,
+          }));
+          await api.generate.error(projectId, buildId).catch(() => {});
+        },
+        async () => {
+          // Read current state, notify API server, then set complete
+          const currentStatus = await new Promise<GenerationStatus>(
+            (resolve) => setStatus((prev) => { resolve(prev); return prev; }),
+          );
 
-  const generate = useCallback(
-    (image: string, name: string) => {
-      controllerRef.current?.abort();
-      setStatus({ ...initialStatus, phase: "generating" });
-      controllerRef.current = streamGenerate(image, name, handleEvent, handleError);
+          if (currentStatus.phase !== "error") {
+            await api.generate
+              .complete(projectId, buildId, currentStatus.usage)
+              .catch(() => {});
+            setStatus((prev) =>
+              prev.phase !== "error"
+                ? { ...prev, phase: "complete" }
+                : prev,
+            );
+          }
+        },
+      );
     },
-    [handleEvent, handleError]
+    [handleEvent],
   );
 
+  // Initial generation — DB records already created by home page
+  const generate = useCallback(
+    (projectId: string, buildId: string, image: string) => {
+      controllerRef.current?.abort();
+      setStatus({
+        ...initialStatus,
+        phase: "generating",
+        projectId,
+        buildId,
+      });
+
+      startStream(projectId, buildId, "/generate", {
+        projectId,
+        buildId,
+        image,
+      });
+    },
+    [startStream],
+  );
+
+  // Iteration on existing project
   const iterate = useCallback(
-    (projectId: string, instruction: string, annotation?: string) => {
+    async (projectId: string, instruction: string, annotation?: string) => {
       controllerRef.current?.abort();
       setStatus((prev) => ({
         ...prev,
@@ -110,9 +157,28 @@ export function useGeneration() {
         messages: [],
         error: null,
       }));
-      controllerRef.current = streamIterate(projectId, instruction, annotation, handleEvent, handleError);
+
+      try {
+        const { buildId } = await api.generate.createIteration(
+          projectId,
+          instruction,
+          annotation,
+        );
+
+        setStatus((prev) => ({ ...prev, buildId }));
+
+        startStream(projectId, buildId, "/iterate", {
+          projectId,
+          buildId,
+          instruction,
+          annotation,
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        setStatus((prev) => ({ ...prev, phase: "error", error: msg }));
+      }
     },
-    [handleEvent, handleError]
+    [startStream],
   );
 
   const cancel = useCallback(() => {

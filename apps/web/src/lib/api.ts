@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8787";
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8788";
+const AGENT_BASE = import.meta.env.VITE_AGENT_URL || "http://localhost:8787";
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
@@ -7,7 +8,9 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error((body as { error?: string }).error || `Request failed: ${res.status}`);
+    throw new Error(
+      (body as { error?: string }).error || `Request failed: ${res.status}`,
+    );
   }
   return res.json() as Promise<T>;
 }
@@ -39,15 +42,47 @@ export interface ProjectDetail extends Project {
 
 export const api = {
   projects: {
-    list: () => request<{ projects: Project[]; total: number }>("/api/projects"),
+    list: () =>
+      request<{ projects: Project[]; total: number }>("/api/projects"),
     get: (id: string) => request<ProjectDetail>(`/api/projects/${id}`),
-    create: (name: string) => request<Project>("/api/projects", {
-      method: "POST",
-      body: JSON.stringify({ name }),
-    }),
-    delete: (id: string) => request<{ id: string; deleted: boolean }>(`/api/projects/${id}`, {
-      method: "DELETE",
-    }),
+    create: (name: string) =>
+      request<Project>("/api/projects", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      }),
+    delete: (id: string) =>
+      request<{ id: string; deleted: boolean }>(`/api/projects/${id}`, {
+        method: "DELETE",
+      }),
+  },
+  generate: {
+    create: (name: string, image: string) =>
+      request<{ projectId: string; buildId: string }>("/api/generate", {
+        method: "POST",
+        body: JSON.stringify({ name, image }),
+      }),
+    createIteration: (projectId: string, instruction: string, annotation?: string) =>
+      request<{ projectId: string; buildId: string }>(
+        `/api/generate/${projectId}/iterate`,
+        {
+          method: "POST",
+          body: JSON.stringify({ instruction, annotation }),
+        },
+      ),
+    complete: (
+      projectId: string,
+      buildId: string,
+      usage?: { input_tokens: number; output_tokens: number; cost_usd: number },
+    ) =>
+      request<{ ok: boolean }>(`/api/generate/${projectId}/complete`, {
+        method: "POST",
+        body: JSON.stringify({ buildId, usage }),
+      }),
+    error: (projectId: string, buildId: string) =>
+      request<{ ok: boolean }>(`/api/generate/${projectId}/error`, {
+        method: "POST",
+        body: JSON.stringify({ buildId }),
+      }),
   },
 };
 
@@ -56,29 +91,21 @@ export type SSEEvent = {
   data: string;
 };
 
-export function streamGenerate(
-  image: string,
-  name: string,
+function readSSEStream(
+  res: Response,
   onEvent: (event: SSEEvent) => void,
-  onError: (error: Error) => void,
-): AbortController {
-  const controller = new AbortController();
+): Promise<void> {
+  return new Promise<void>(async (resolve, reject) => {
+    if (!res.body) {
+      reject(new Error("No response body"));
+      return;
+    }
 
-  fetch(`${API_BASE}/api/generate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, image }),
-    signal: controller.signal,
-  })
-    .then(async (res) => {
-      if (!res.ok || !res.body) {
-        throw new Error(`Generate failed: ${res.status}`);
-      }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
+    try {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -97,58 +124,35 @@ export function streamGenerate(
           }
         }
       }
-    })
-    .catch((err) => {
-      if (err instanceof Error && err.name !== "AbortError") {
-        onError(err);
-      }
-    });
-
-  return controller;
+      resolve();
+    } catch (err) {
+      reject(err);
+    }
+  });
 }
 
-export function streamIterate(
-  projectId: string,
-  instruction: string,
-  annotation: string | undefined,
+// Stream directly from the agent server
+export function streamFromAgent(
+  endpoint: string,
+  body: Record<string, unknown>,
   onEvent: (event: SSEEvent) => void,
   onError: (error: Error) => void,
+  onDone: () => void,
 ): AbortController {
   const controller = new AbortController();
 
-  fetch(`${API_BASE}/api/generate/${projectId}/iterate`, {
+  fetch(`${AGENT_BASE}${endpoint}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ instruction, annotation }),
+    body: JSON.stringify(body),
     signal: controller.signal,
   })
     .then(async (res) => {
-      if (!res.ok || !res.body) {
-        throw new Error(`Iterate failed: ${res.status}`);
+      if (!res.ok) {
+        throw new Error(`Agent request failed: ${res.status}`);
       }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        let currentEvent = "message";
-        for (const line of lines) {
-          if (line.startsWith("event: ")) {
-            currentEvent = line.slice(7).trim();
-          } else if (line.startsWith("data: ")) {
-            onEvent({ event: currentEvent, data: line.slice(6) });
-            currentEvent = "message";
-          }
-        }
-      }
+      await readSSEStream(res, onEvent);
+      onDone();
     })
     .catch((err) => {
       if (err instanceof Error && err.name !== "AbortError") {
@@ -159,6 +163,7 @@ export function streamIterate(
   return controller;
 }
 
-export function getPreviewUrl(projectId: string, buildId: string): string {
-  return `${API_BASE}/api/preview/${projectId}/builds/${buildId}/`;
+export function getPreviewUrl(projectId: string, _buildId: string): string {
+  // Serve directly from agent server — the API server proxy has issues in wrangler dev
+  return `${AGENT_BASE}/builds/${projectId}/`;
 }

@@ -21,39 +21,48 @@ function getMimeType(path: string): string {
 
 const preview = new Hono<App>();
 
-// Serve built assets from R2 for iframe preview
+// Serve built assets — proxies to agent server in dev, R2 in production
 preview.get("/:projectId/builds/:buildId/*", async (c) => {
   const { projectId, buildId } = c.req.param();
   const path = c.req.path.split(`/builds/${buildId}/`)[1] || "index.html";
-  const r2Key = `projects/${projectId}/builds/${buildId}/${path}`;
 
-  const object = await c.env.ASSETS.get(r2Key);
+  // Try R2 first (production)
+  try {
+    const r2Key = `projects/${projectId}/builds/${buildId}/${path}`;
+    const object = await c.env.ASSETS.get(r2Key);
 
-  if (!object) {
-    // Fall back to index.html for SPA routing
-    const fallbackKey = `projects/${projectId}/builds/${buildId}/index.html`;
-    const fallback = await c.env.ASSETS.get(fallbackKey);
-
-    if (!fallback) {
-      return c.json({ error: "Not found" }, 404);
+    if (object) {
+      return new Response(object.body, {
+        headers: {
+          "Content-Type": getMimeType(path),
+          "Cache-Control": path.includes("assets/")
+            ? "public, max-age=31536000, immutable"
+            : "no-cache",
+        },
+      });
     }
-
-    return new Response(fallback.body, {
-      headers: {
-        "Content-Type": "text/html",
-        "Cache-Control": "no-cache",
-      },
-    });
+  } catch {
+    // R2 not available, fall through to agent proxy
   }
 
-  return new Response(object.body, {
-    headers: {
-      "Content-Type": getMimeType(path),
-      "Cache-Control": path.includes("assets/")
-        ? "public, max-age=31536000, immutable"
-        : "no-cache",
-    },
-  });
+  // Proxy to agent server (local dev)
+  try {
+    const agentUrl = `${c.env.AGENT_URL}/builds/${projectId}/${path}`;
+    const agentRes = await fetch(agentUrl);
+
+    if (agentRes.ok) {
+      return new Response(agentRes.body, {
+        headers: {
+          "Content-Type": agentRes.headers.get("Content-Type") || getMimeType(path),
+          "Cache-Control": "no-cache",
+        },
+      });
+    }
+  } catch {
+    // Agent not reachable
+  }
+
+  return c.json({ error: "Not found" }, 404);
 });
 
 export { preview };

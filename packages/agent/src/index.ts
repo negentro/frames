@@ -1,73 +1,200 @@
 import http from "node:http";
-import { generateFromWireframe, iterateOnProject } from "./agent";
+import { mkdir, cp, writeFile, readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
+import { generateFromWireframe, iterateOnProject, type AgentEvent } from "./agent";
 
-const PORT = 8787;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const PORT = Number(process.env.PORT || 8787);
+const PROJECTS_DIR = process.env.PROJECTS_DIR || "/tmp/eigen-projects";
+const TEMPLATES_DIR = join(__dirname, "templates");
 
-const server = http.createServer(async (req, res) => {
-  // Set JSON content type for all responses
-  res.setHeader("Content-Type", "application/json");
+async function ensureProjectDir(projectId: string): Promise<string> {
+  const projectDir = join(PROJECTS_DIR, projectId);
 
-  // Collect request body
-  const body = await new Promise<string>((resolve) => {
-    let data = "";
-    req.on("data", (chunk: Buffer) => {
-      data += chunk.toString();
+  if (!existsSync(projectDir)) {
+    await mkdir(projectDir, { recursive: true });
+
+    // Copy template files
+    const templateFiles = [
+      "package.json",
+      "vite.config.ts",
+      "tsconfig.json",
+      "index.html",
+      "index.css",
+    ];
+    for (const file of templateFiles) {
+      const dest = file === "index.css" ? join(projectDir, "src", file) : join(projectDir, file);
+      await mkdir(join(dest, ".."), { recursive: true });
+      await cp(join(TEMPLATES_DIR, file), dest);
+    }
+
+    // Initialize git repo
+    execSync("git init && git add -A && git commit -m 'Initial project setup'", {
+      cwd: projectDir,
+      stdio: "pipe",
     });
+
+    // Install dependencies
+    execSync("npm install", {
+      cwd: projectDir,
+      stdio: "pipe",
+      timeout: 120000,
+    });
+  }
+
+  return projectDir;
+}
+
+function writeSSE(res: http.ServerResponse, event: string, data: unknown) {
+  res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
+}
+
+async function streamAgentEvents(
+  res: http.ServerResponse,
+  events: AsyncGenerator<AgentEvent>,
+) {
+  for await (const event of events) {
+    const timestamp = new Date().toISOString().slice(11, 19);
+    const preview = event.message || event.error || "";
+    console.log(`[${timestamp}] ${event.type}: ${preview}`);
+    writeSSE(res, event.type, event);
+  }
+  res.end();
+}
+
+function parseBody(req: http.IncomingMessage): Promise<string> {
+  return new Promise((resolve) => {
+    let data = "";
+    req.on("data", (chunk: Buffer) => { data += chunk.toString(); });
     req.on("end", () => resolve(data));
   });
+}
+
+const server = http.createServer(async (req, res) => {
+  // CORS headers
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204);
+    res.end();
+    return;
+  }
 
   try {
+    const body = await parseBody(req);
+
     if (req.method === "POST" && req.url === "/generate") {
-      // POST /generate - Initial generation from a wireframe image
-      // Accepts: { imageBase64: string }
-      // Streams back agent status messages as the wireframe is analyzed
-      // and a React SPA is generated from scratch.
-      const { imageBase64 } = JSON.parse(body || "{}");
+      const { projectId, buildId, image } = JSON.parse(body);
+      console.log(`\n=== GENERATE projectId=${projectId} ===`);
 
-      const messages: unknown[] = [];
-      for await (const msg of generateFromWireframe(imageBase64)) {
-        messages.push(msg);
-      }
+      // Set up SSE
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
 
-      res.writeHead(200);
-      res.end(JSON.stringify({ status: "ok", messages }));
+      writeSSE(res, "status", { type: "status", message: "Setting up project..." });
+
+      const projectDir = await ensureProjectDir(projectId);
+
+      writeSSE(res, "status", { type: "status", message: "Dependencies installed. Starting generation..." });
+
+      const events = generateFromWireframe(projectDir, image);
+      await streamAgentEvents(res, events);
       return;
     }
 
     if (req.method === "POST" && req.url === "/iterate") {
-      // POST /iterate - Iterate on an existing generated project
-      // Accepts: { projectDir: string, instruction: string, annotationBase64?: string }
-      // Takes a user instruction (and optional annotated screenshot) and applies
-      // changes to the existing project via the agent.
-      const { projectDir, instruction, annotationBase64 } = JSON.parse(
-        body || "{}"
-      );
+      const { projectId, buildId, instruction, annotation } = JSON.parse(body);
+      console.log(`\n=== ITERATE projectId=${projectId} ===`);
 
-      const messages: unknown[] = [];
-      for await (const msg of iterateOnProject(
-        projectDir,
-        instruction,
-        annotationBase64
-      )) {
-        messages.push(msg);
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
+
+      const projectDir = join(PROJECTS_DIR, projectId);
+      if (!existsSync(projectDir)) {
+        writeSSE(res, "error", { type: "error", error: "Project not found" });
+        res.end();
+        return;
       }
 
-      res.writeHead(200);
-      res.end(JSON.stringify({ status: "ok", messages }));
+      writeSSE(res, "status", { type: "status", message: "Starting iteration..." });
+
+      const events = iterateOnProject(projectDir, instruction, annotation);
+      await streamAgentEvents(res, events);
       return;
     }
 
-    // Unknown route
-    res.writeHead(404);
+    // Serve build artifacts: GET /builds/:projectId/*
+    if (req.method === "GET" && req.url?.startsWith("/builds/")) {
+      const pathParts = req.url.slice("/builds/".length);
+      const slashIdx = pathParts.indexOf("/");
+      const projectId = slashIdx === -1 ? pathParts : pathParts.slice(0, slashIdx);
+      const filePath = slashIdx === -1 ? "index.html" : pathParts.slice(slashIdx + 1) || "index.html";
+
+      const fullPath = join(PROJECTS_DIR, projectId, "dist", filePath);
+      if (!existsSync(fullPath)) {
+        // SPA fallback
+        const fallbackPath = join(PROJECTS_DIR, projectId, "dist", "index.html");
+        if (existsSync(fallbackPath)) {
+          const content = await readFile(fallbackPath);
+          res.writeHead(200, { "Content-Type": "text/html" });
+          res.end(content);
+          return;
+        }
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "File not found" }));
+        return;
+      }
+
+      const content = await readFile(fullPath);
+      const ext = fullPath.slice(fullPath.lastIndexOf("."));
+      const mimeTypes: Record<string, string> = {
+        ".html": "text/html",
+        ".js": "application/javascript",
+        ".css": "text/css",
+        ".json": "application/json",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".svg": "image/svg+xml",
+      };
+      res.writeHead(200, { "Content-Type": mimeTypes[ext] || "application/octet-stream" });
+      res.end(content);
+      return;
+    }
+
+    if (req.method === "GET" && req.url === "/health") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ status: "ok" }));
+      return;
+    }
+
+    res.writeHead(404, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Not found" }));
   } catch (err) {
-    res.writeHead(500);
-    res.end(
-      JSON.stringify({ error: err instanceof Error ? err.message : "Unknown error" })
-    );
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("Server error:", message);
+
+    if (!res.headersSent) {
+      res.writeHead(500, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: message }));
+    } else {
+      writeSSE(res, "error", { type: "error", error: message });
+      res.end();
+    }
   }
 });
 
 server.listen(PORT, () => {
-  console.log(`Agent server listening on port ${PORT}`);
+  console.log(`Agent server listening on http://localhost:${PORT}`);
+  console.log(`Projects directory: ${PROJECTS_DIR}`);
 });
