@@ -196,9 +196,7 @@ export function ProjectPage() {
             />
           ) : (
             <div className="flex h-full items-center justify-center text-neutral-600">
-              {status.phase === "generating"
-                ? "Building preview..."
-                : "No preview available yet"}
+              Preview Unavailable
             </div>
           )}
         </div>
@@ -249,16 +247,11 @@ export function ProjectPage() {
               Describe changes to iterate on your project.
             </p>
           )}
-          {messages.length === 0 && status.phase === "generating" && (
-            <p className="text-sm text-neutral-500">
-              Generation in progress
-            </p>
-          )}
           {messages.map((msg, i) => (
             <div
               key={i}
               style={i > 0 ? { marginTop: 12 } : undefined}
-              className={msg.role === "user" ? "text-right" : ""}
+              className={msg.role === "user" ? "flex justify-end" : ""}
             >
               <div
                 className={`inline-block max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
@@ -268,7 +261,7 @@ export function ProjectPage() {
                 }`}
               >
                 <div>{msg.content}</div>
-                {msg.role === "system" && (
+                {msg.role === "system" && msg.status && (
                   <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[11px] text-neutral-500">
                     {msg.status === "pending" ? (
                       <>

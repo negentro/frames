@@ -41,7 +41,10 @@ export function useGeneration() {
             msg.startsWith("Edit:") ||
             msg.startsWith("Bash:") ||
             msg.startsWith("Ollama:") ||
-            msg.startsWith("Describing");
+            msg.startsWith("Describing") ||
+            msg.startsWith("Dependencies") ||
+            msg.startsWith("Starting agent") ||
+            msg.startsWith("Starting iteration");
           if (!isFiltered) {
             setStatus((prev) => ({
               ...prev,

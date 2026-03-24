@@ -171,10 +171,7 @@ export const ollamaBackend: AgentBackend = async function* (
   const { text, images } = extractImages(prompt);
 
   if (images.length > 0) {
-    yield {
-      type: "status",
-      message: `Describing ${images.length} image(s) with ${VISION_MODEL}...`,
-    };
+    yield { type: "status", message: "Analyzing wireframe" };
 
     const descriptions: string[] = [];
     for (const img of images) {
@@ -191,8 +188,27 @@ export const ollamaBackend: AgentBackend = async function* (
             `[Image ${i + 1} description]:\n${d}`,
         )
         .join("\n\n");
+  }
 
-    yield { type: "status", message: "Analyzing wireframe" };
+  if (images.length > 0) {
+    yield { type: "status", message: "Generating initial site layout" };
+  } else {
+    // For iterations: ask the model to summarize what it will change
+    try {
+      const summaryRes = await chatCompletion(config.model, [
+        {
+          role: "system",
+          content:
+            "You are a helpful assistant. Given a user's request to modify a React app, respond with a single short sentence (max 10 words) describing what will be changed. No punctuation at the end. Examples: 'Centering all heading text', 'Adding a dark mode toggle', 'Replacing the footer layout'",
+        },
+        { role: "user", content: prompt },
+      ]);
+      const summary =
+        summaryRes.choices[0]?.message?.content?.trim() || "Applying changes";
+      yield { type: "status", message: summary };
+    } catch {
+      yield { type: "status", message: "Applying changes" };
+    }
   }
 
   const messages: ChatMessage[] = [
@@ -314,7 +330,6 @@ export const ollamaBackend: AgentBackend = async function* (
     cost_usd: 0,
   };
 
-  yield { type: "status", message: "Generating initial site layout" };
   yield { type: "complete", message: "Done" };
 
   log(`Ollama agent complete after ${turn} turns`);
