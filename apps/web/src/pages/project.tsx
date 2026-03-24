@@ -172,17 +172,12 @@ export function ProjectPage() {
       {/* Preview Panel */}
       <div className="flex flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <div className="flex items-center gap-3">
-            <button
-              className="text-neutral-400 hover:text-white"
-              onClick={() => navigate("/")}
-            >
-              &larr;
-            </button>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-neutral-400">
-              Preview
-            </h2>
-          </div>
+          <button
+            className="text-neutral-400 hover:text-white"
+            onClick={() => navigate("/")}
+          >
+            &larr;
+          </button>
           {status.phase === "generating" && (
             <div className="flex items-center gap-2 text-xs text-neutral-400">
               <div className="h-3 w-3 animate-spin rounded-full border border-neutral-600 border-t-white" />
@@ -214,7 +209,7 @@ export function ProjectPage() {
         {/* Header */}
         <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
           <div>
-            <h2 className="text-sm font-medium">{project.name}</h2>
+            <h2 className="text-sm font-medium font-mono">{id}</h2>
             <span className="text-xs text-neutral-500">
               {status.phase === "generating" ? "generating" : project.status}
             </span>
@@ -248,7 +243,7 @@ export function ProjectPage() {
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="flex-1 overflow-y-auto px-4 py-4 scrollbar-thin">
           {messages.length === 0 && status.phase !== "generating" && (
             <p className="text-sm text-neutral-500">
               Describe changes to iterate on your project.
@@ -262,13 +257,14 @@ export function ProjectPage() {
           {messages.map((msg, i) => (
             <div
               key={i}
-              className={`mb-3 ${msg.role === "user" ? "text-right" : ""}`}
+              style={i > 0 ? { marginTop: 12 } : undefined}
+              className={msg.role === "user" ? "text-right" : ""}
             >
               <div
-                className={`inline-block rounded-lg px-3 py-2 text-sm ${
+                className={`inline-block max-w-[85%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
                   msg.role === "user"
                     ? "bg-blue-600 text-white"
-                    : "bg-neutral-800 text-neutral-300"
+                    : "bg-neutral-800/60 text-neutral-300"
                 }`}
               >
                 {msg.content}
