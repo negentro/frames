@@ -35,13 +35,14 @@ export function useGeneration() {
         case "status": {
           const msg: string = data.message || event.data;
           // Only show high-level status messages, not tool calls
-          const isToolCall =
+          const isFiltered =
             msg.startsWith("Write:") ||
             msg.startsWith("Read:") ||
             msg.startsWith("Edit:") ||
             msg.startsWith("Bash:") ||
-            msg.startsWith("Ollama:");
-          if (!isToolCall) {
+            msg.startsWith("Ollama:") ||
+            msg.startsWith("Describing");
+          if (!isFiltered) {
             setStatus((prev) => ({
               ...prev,
               messages: [...prev.messages, msg],

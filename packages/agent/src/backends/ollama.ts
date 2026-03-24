@@ -192,7 +192,7 @@ export const ollamaBackend: AgentBackend = async function* (
         )
         .join("\n\n");
 
-    yield { type: "status", message: "Image analysis complete" };
+    yield { type: "status", message: "Analyzing wireframe" };
   }
 
   const messages: ChatMessage[] = [
@@ -314,6 +314,7 @@ export const ollamaBackend: AgentBackend = async function* (
     cost_usd: 0,
   };
 
+  yield { type: "status", message: "Generating initial site layout" };
   yield { type: "complete", message: "Done" };
 
   log(`Ollama agent complete after ${turn} turns`);

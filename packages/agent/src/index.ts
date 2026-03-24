@@ -99,11 +99,11 @@ const server = http.createServer(async (req, res) => {
         Connection: "keep-alive",
       });
 
-      writeSSE(res, "status", { type: "status", message: "Setting up project..." });
+      writeSSE(res, "status", { type: "status", message: "Setting up project" });
 
       const projectDir = await ensureProjectDir(projectId);
 
-      writeSSE(res, "status", { type: "status", message: "Dependencies installed. Starting generation..." });
+      writeSSE(res, "status", { type: "status", message: "Dependencies installed" });
 
       const events = generateFromWireframe(projectDir, image);
       await streamAgentEvents(res, events);
@@ -127,7 +127,7 @@ const server = http.createServer(async (req, res) => {
         return;
       }
 
-      writeSSE(res, "status", { type: "status", message: "Starting iteration..." });
+      writeSSE(res, "status", { type: "status", message: "Starting iteration" });
 
       const events = iterateOnProject(projectDir, instruction, annotation);
       await streamAgentEvents(res, events);

@@ -62,7 +62,7 @@ export async function* generateFromWireframe(
   projectDir: string,
   imageBase64: string,
 ): AsyncGenerator<AgentEvent> {
-  yield { type: "status", message: "Analyzing wireframe..." };
+  yield { type: "status", message: "Analyzing wireframe" };
 
   const prompt = `Look at this wireframe and create a simple React app that matches its layout. Keep it minimal — just the basic structure with Tailwind styling. Write src/main.tsx and any components needed, then run "npm run build" and git commit.
 
@@ -76,7 +76,7 @@ export async function* iterateOnProject(
   instruction: string,
   annotationBase64?: string,
 ): AsyncGenerator<AgentEvent> {
-  yield { type: "status", message: "Applying changes..." };
+  yield { type: "status", message: "Applying changes" };
 
   let prompt = instruction;
   if (annotationBase64) {
@@ -91,7 +91,7 @@ async function* runAgent(
   projectDir: string,
   prompt: string,
 ): AsyncGenerator<AgentEvent> {
-  yield { type: "status", message: "Starting agent..." };
+  yield { type: "status", message: "Starting agent" };
 
   const backend = getBackend();
 

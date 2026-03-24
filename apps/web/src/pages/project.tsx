@@ -6,6 +6,7 @@ import { useGeneration } from "../hooks/use-generation";
 interface ChatMessage {
   role: "user" | "system";
   content: string;
+  status: "pending" | "completed";
   timestamp: Date;
 }
 
@@ -42,6 +43,7 @@ export function ProjectPage() {
             p.messages.map((m) => ({
               role: m.role as "user" | "system",
               content: m.content,
+              status: "completed" as const,
               timestamp: new Date(m.created_at),
             })),
           );
@@ -76,12 +78,16 @@ export function ProjectPage() {
   }, [status.phase, id]);
 
   const addMessage = useCallback(
-    (role: "user" | "system", content: string) => {
+    (role: "user" | "system", content: string, msgStatus: "pending" | "completed" = "pending") => {
       setMessages((prev) => {
         if (prev.at(-1)?.content === content && prev.at(-1)?.role === role) {
           return prev;
         }
-        return [...prev, { role, content, timestamp: new Date() }];
+        // Mark all previous pending messages as completed
+        const updated = prev.map((m) =>
+          m.status === "pending" ? { ...m, status: "completed" as const } : m,
+        );
+        return [...updated, { role, content, status: msgStatus, timestamp: new Date() }];
       });
       if (id) {
         api.projects.addMessage(id, role, content).catch(() => {});
@@ -105,12 +111,16 @@ export function ProjectPage() {
     }
   }, [status.phase, status.error, addMessage]);
 
-  // Add completion to chat
+  // Mark all messages completed when generation finishes
   useEffect(() => {
     if (status.phase === "complete") {
-      addMessage("system", "Generation complete. Preview updated.");
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.status === "pending" ? { ...m, status: "completed" as const } : m,
+        ),
+      );
     }
-  }, [status.phase, addMessage]);
+  }, [status.phase]);
 
   // Scroll chat to bottom
   useEffect(() => {
@@ -174,12 +184,6 @@ export function ProjectPage() {
           >
             &larr;
           </button>
-          {status.phase === "generating" && (
-            <div className="flex items-center gap-2 text-xs text-neutral-400">
-              <div className="h-3 w-3 animate-spin rounded-full border border-neutral-600 border-t-white" />
-              Building...
-            </div>
-          )}
         </div>
 
         <div className="flex-1 bg-neutral-950">
@@ -207,7 +211,7 @@ export function ProjectPage() {
           <div>
             <h2 className="text-sm font-medium font-mono">{id}</h2>
             <span className="text-xs text-neutral-500">
-              {status.phase === "generating" ? "generating" : project.status}
+              Created: {new Date(project.created_at).toLocaleString()}
             </span>
           </div>
         </div>
@@ -247,7 +251,7 @@ export function ProjectPage() {
           )}
           {messages.length === 0 && status.phase === "generating" && (
             <p className="text-sm text-neutral-500">
-              Generation in progress...
+              Generation in progress
             </p>
           )}
           {messages.map((msg, i) => (
@@ -263,7 +267,32 @@ export function ProjectPage() {
                     : "bg-neutral-800/60 text-neutral-300"
                 }`}
               >
-                {msg.content}
+                <div>{msg.content}</div>
+                {msg.role === "system" && (
+                  <div className="mt-1.5 flex items-center justify-end gap-1.5 text-[11px] text-neutral-500">
+                    {msg.status === "pending" ? (
+                      <>
+                        <span>pending</span>
+                        <div className="h-3 w-3 animate-spin rounded-full border border-neutral-600 border-t-neutral-400" />
+                      </>
+                    ) : (
+                      <>
+                        <span>completed</span>
+                        <svg
+                          className="h-3 w-3 text-neutral-400"
+                          viewBox="0 0 16 16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M2 8.5l4 4L14 3.5" />
+                        </svg>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           ))}
