@@ -198,7 +198,7 @@ export async function runOrchestrator(
       if (toolCalls.length === 0) {
         // No tool calls — should be the JSON plan
         log(`Orchestrator raw response: ${content.slice(0, 500)}`);
-        return parsePlan(content, prompt);
+        return parsePlan(content, prompt, isIteration);
       }
 
       // Execute tools and feed results back
@@ -260,6 +260,7 @@ export async function runOrchestrator(
     return parsePlan(
       finalRes.choices[0]?.message?.content || "",
       prompt,
+      isIteration,
     );
   }
 
@@ -269,10 +270,11 @@ export async function runOrchestrator(
   return parsePlan(
     response.choices[0]?.message?.content || "",
     prompt,
+    isIteration,
   );
 }
 
-function parsePlan(text: string, fallbackPrompt: string): OrchestratorPlan {
+function parsePlan(text: string, fallbackPrompt: string, isIteration: boolean): OrchestratorPlan {
   const jsonStr = extractJSON(text);
   if (jsonStr) {
     try {
@@ -283,6 +285,13 @@ function parsePlan(text: string, fallbackPrompt: string): OrchestratorPlan {
           (f: FilePlan) =>
             f.path !== "src/main.tsx" && f.path !== "src/index.css",
         );
+        // For initial generation, force all actions to "create"
+        if (!isIteration) {
+          parsed.files = parsed.files.map((f: FilePlan) => ({
+            ...f,
+            action: "create",
+          }));
+        }
         // Ensure App.tsx is last
         const appIdx = parsed.files.findIndex(
           (f: FilePlan) => f.path === "src/App.tsx",

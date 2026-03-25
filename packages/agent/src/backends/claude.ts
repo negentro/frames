@@ -39,6 +39,8 @@ export const claudeBackend: AgentBackend = async function* (
     message: `Budget: $${(config.maxBudgetUsd ?? 0).toFixed(2)}, max ${config.maxTurns} turns`,
   };
 
+  log(`Using model: ${config.model}, iteration: ${config.isIteration}`);
+
   const q = query({
     prompt: config.prompt,
     options: {
@@ -50,6 +52,8 @@ export const claudeBackend: AgentBackend = async function* (
       allowDangerouslySkipPermissions: true,
       maxTurns: config.maxTurns,
       maxBudgetUsd: config.maxBudgetUsd,
+      // Limit thinking tokens to control cost — iterations need less reasoning
+      maxThinkingTokens: config.isIteration ? 4096 : 8192,
     },
   });
 

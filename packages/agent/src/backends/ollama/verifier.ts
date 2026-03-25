@@ -10,17 +10,24 @@ import {
 
 const KNOWN_FIX_TOOLS = new Set(["Read", "Write", "Edit", "Bash"]);
 
-const FIX_SYSTEM = `You are a build error fixer for a React + TypeScript app with Tailwind v4.
+const FIX_SYSTEM = `You are a build error fixer. You MUST use tools to fix errors. Do NOT explain — just call tools.
 
-You are given a build error. Fix the error by reading the relevant files and making targeted edits.
+Available tools: Read, Write, Edit, Bash
+
+Steps:
+1. Read the file mentioned in the error
+2. Use Edit or Write to fix it
+3. Run "npm run build" with Bash to verify
+
+Call tools using this JSON format in your response:
+{"name": "Read", "arguments": {"file_path": "src/App.tsx"}}
+{"name": "Edit", "arguments": {"file_path": "src/App.tsx", "old_string": "broken code", "new_string": "fixed code"}}
+{"name": "Bash", "arguments": {"command": "npm run build"}}
 
 Rules:
-- React 19 uses createRoot from "react-dom/client". Never use ReactDOM.render().
-- Do NOT import React — it is not needed in React 19 with JSX transform.
-- Tailwind v4: do NOT import tailwindcss anywhere. It is configured via src/index.css.
-- Only modify files under src/.
-- Make minimal changes to fix the error.
-- After fixing, run "npm run build" to verify.`;
+- React 19: do NOT import React. Use createRoot from "react-dom/client".
+- Tailwind v4: do NOT import tailwindcss. Use utility classes only.
+- Make minimal changes.`;
 
 const MAX_FIX_TURNS = 5;
 

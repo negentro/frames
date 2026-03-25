@@ -7,6 +7,7 @@ export interface BackendConfig {
   model: string;
   maxTurns: number;
   maxBudgetUsd?: number;
+  isIteration: boolean;
 }
 
 export type AgentBackend = (

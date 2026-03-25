@@ -88,11 +88,12 @@ export async function chatCompletion(
     const content = msg.content as string || "";
     const reasoning = msg.reasoning as string || "";
 
-    const toolCalls = msg.tool_calls as unknown[] | undefined;
-
-    log(`LLM: content=${content.length} chars, reasoning=${reasoning.length} chars, tool_calls=${toolCalls?.length ?? 0}`);
-    if (reasoning && !content) {
-      log(`LLM reasoning preview: ${reasoning.slice(0, 200)}`);
+    if (!content && reasoning) {
+      log(`LLM: content empty, reasoning=${reasoning.length} chars (qwen3 thinking mode?)`);
+    } else if (content) {
+      log(`LLM: content=${content.length} chars`);
+    } else {
+      log(`LLM: empty response`);
     }
   }
 

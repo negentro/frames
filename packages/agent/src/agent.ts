@@ -32,6 +32,13 @@ const MAX_BUDGET_PER_QUERY_USD = Number(
 const MAX_TURNS_PER_QUERY = Number(process.env.EIGEN_MAX_TURNS || "15");
 const MODEL = process.env.EIGEN_MODEL || "claude-sonnet-4-6";
 
+// Cheaper model for iterations (Claude only — Ollama ignores this)
+const ITERATION_MODEL =
+  process.env.EIGEN_ITERATION_MODEL || "claude-haiku-4-5-20251001";
+const ITERATION_BUDGET = Number(
+  process.env.EIGEN_ITERATION_BUDGET_USD || "0.25",
+);
+
 const BACKENDS: Record<string, AgentBackend> = {
   claude: claudeBackend,
   ollama: ollamaBackend,
@@ -66,7 +73,7 @@ export async function* generateFromWireframe(
 
 ![wireframe](${imageBase64})`;
 
-  yield* runAgent(projectDir, prompt);
+  yield* runAgent(projectDir, prompt, false);
 }
 
 export async function* iterateOnProject(
@@ -80,28 +87,30 @@ export async function* iterateOnProject(
   }
   prompt += `\n\nAfter changes, run "npm run build" and git commit.`;
 
-  yield* runAgent(projectDir, prompt);
+  yield* runAgent(projectDir, prompt, true);
 }
 
 async function* runAgent(
   projectDir: string,
   prompt: string,
-  statusMessage?: string,
+  isIteration: boolean,
 ): AsyncGenerator<AgentEvent> {
-  if (statusMessage) {
-    yield { type: "status", message: statusMessage };
-  }
-
   const backend = getBackend();
+  const isClaude = process.env.MODEL_PROVIDER === "claude";
+
+  // Use cheaper model + lower budget for iterations on Claude
+  const model = isIteration && isClaude ? ITERATION_MODEL : MODEL;
+  const budget = isIteration ? ITERATION_BUDGET : MAX_BUDGET_PER_QUERY_USD;
 
   try {
     yield* backend({
       projectDir,
       prompt,
       systemPrompt: SYSTEM_PROMPT,
-      model: MODEL,
+      model,
       maxTurns: MAX_TURNS_PER_QUERY,
-      maxBudgetUsd: MAX_BUDGET_PER_QUERY_USD,
+      maxBudgetUsd: budget,
+      isIteration,
     });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : "Unknown agent error";
