@@ -1,30 +1,26 @@
 import { claudeBackend } from "./backends/claude.js";
 import { ollamaBackend } from "./backends/ollama.js";
+import { describeImageWithClaude } from "./backends/claude-vision.js";
 import type { AgentBackend } from "./backends/types.js";
 
 const SYSTEM_PROMPT = `You are a frontend developer. Generate a simple React + TypeScript app.
 
-The project is already set up with dependencies installed. Do NOT modify package.json, vite.config.ts, tsconfig.json, or index.html.
+The project is already set up in your current working directory with dependencies installed. Use RELATIVE paths (e.g. "src/App.tsx"), never absolute paths. Do NOT search for files — they are in the cwd.
+
+Do NOT modify package.json, vite.config.ts, tsconfig.json, or index.html.
 
 CRITICAL RULES:
 - src/index.css already exists with Tailwind v4 via \`@import "tailwindcss"\`. Do NOT import Tailwind anywhere else.
-- Tailwind v4 does NOT use tailwindcss/tailwind.css or tailwind.config.js.
 - React 19 does NOT have ReactDOM.render(). You MUST use createRoot.
+- src/main.tsx is already created. Do NOT overwrite it.
 - Only create files under src/.
-- Do NOT run git push, git remote, or any network commands. Only use git for local commits.
-
-src/main.tsx MUST follow this exact pattern:
-\`\`\`tsx
-import { createRoot } from "react-dom/client";
-import "./index.css";
-import App from "./App";
-
-createRoot(document.getElementById("root")!).render(<App />);
-\`\`\`
+- Do NOT run git push, git remote, or any network commands.
+- Do NOT use find or ls to explore. Just write your files directly.
+- Write ALL files first, then run "npm run build", then "git add -A && git commit -m 'description'".
 
 Available libraries: react 19, react-dom 19, react-router-dom v7, tailwindcss v4, lucide-react, clsx.
 
-Be concise. Write minimal code that works. After writing files, run "npm run build" to verify it compiles. If it fails, fix it. Then git commit.`;
+Be concise. Write minimal code that works.`;
 
 const MAX_BUDGET_PER_QUERY_USD = Number(
   process.env.EIGEN_MAX_BUDGET_PER_QUERY_USD || "1.00",
@@ -32,7 +28,6 @@ const MAX_BUDGET_PER_QUERY_USD = Number(
 const MAX_TURNS_PER_QUERY = Number(process.env.EIGEN_MAX_TURNS || "15");
 const MODEL = process.env.EIGEN_MODEL || "claude-sonnet-4-6";
 
-// Cheaper model for iterations (Claude only — Ollama ignores this)
 const ITERATION_MODEL =
   process.env.EIGEN_ITERATION_MODEL || "claude-haiku-4-5-20251001";
 const ITERATION_BUDGET = Number(
@@ -60,6 +55,45 @@ function getBackend(): AgentBackend {
   return backend;
 }
 
+// Extract and describe images, returning a text-only prompt
+// This is used for Claude to avoid re-sending base64 on every turn
+async function describeImages(
+  prompt: string,
+  events: AgentEvent[],
+): Promise<string> {
+  const IMAGE_PATTERN = /!\[[^\]]*\]\((data:image\/[^;]+;base64,[^)]+)\)/g;
+  const images: string[] = [];
+  const textPrompt = prompt.replace(IMAGE_PATTERN, (_, dataUrl: string) => {
+    images.push(dataUrl);
+    return "";
+  });
+
+  if (images.length === 0) return prompt;
+
+  const isClaude = process.env.MODEL_PROVIDER === "claude";
+  if (!isClaude) return prompt; // Ollama handles images in its own pipeline
+
+  events.push({ type: "status", message: "Analyzing wireframe" });
+
+  const descriptions: string[] = [];
+  for (const img of images) {
+    console.log(`[vision] Describing image (${img.length} chars data URL)`);
+    const desc = await describeImageWithClaude(img);
+    console.log(`[vision] Description result (${desc.length} chars): ${desc.slice(0, 300)}`);
+    descriptions.push(desc);
+  }
+
+  const finalPrompt =
+    textPrompt.trim() +
+    "\n\n" +
+    descriptions
+      .map((d, i) => `[Wireframe ${i + 1} description]:\n${d}`)
+      .join("\n\n");
+
+  console.log(`[vision] Final prompt to agent (${finalPrompt.length} chars): ${finalPrompt.slice(0, 500)}`);
+  return finalPrompt;
+}
+
 export interface AgentEvent {
   type: "status" | "usage" | "complete" | "error" | "assistant";
   [key: string]: unknown;
@@ -69,9 +103,14 @@ export async function* generateFromWireframe(
   projectDir: string,
   imageBase64: string,
 ): AsyncGenerator<AgentEvent> {
-  const prompt = `Look at this wireframe and create a simple React app that matches its layout. Keep it minimal — just the basic structure with Tailwind styling. Write src/main.tsx and any components needed, then run "npm run build" and git commit.
+  const rawPrompt = `Look at this wireframe and create a simple React app that matches its layout. Keep it minimal — just the basic structure with Tailwind styling. Write src/main.tsx and any components needed, then run "npm run build" and git commit.
 
 ![wireframe](${imageBase64})`;
+
+  // Describe image first so the agent loop gets text only
+  const events: AgentEvent[] = [];
+  const prompt = await describeImages(rawPrompt, events);
+  for (const ev of events) yield ev;
 
   yield* runAgent(projectDir, prompt, false);
 }
@@ -81,11 +120,16 @@ export async function* iterateOnProject(
   instruction: string,
   annotationBase64?: string,
 ): AsyncGenerator<AgentEvent> {
-  let prompt = instruction;
+  let rawPrompt = instruction;
   if (annotationBase64) {
-    prompt += `\n\n![annotation](${annotationBase64})`;
+    rawPrompt += `\n\n![annotation](${annotationBase64})`;
   }
-  prompt += `\n\nAfter changes, run "npm run build" and git commit.`;
+  rawPrompt += `\n\nAfter changes, run "npm run build" and git commit.`;
+
+  // Describe any images first
+  const events: AgentEvent[] = [];
+  const prompt = await describeImages(rawPrompt, events);
+  for (const ev of events) yield ev;
 
   yield* runAgent(projectDir, prompt, true);
 }
@@ -98,7 +142,6 @@ async function* runAgent(
   const backend = getBackend();
   const isClaude = process.env.MODEL_PROVIDER === "claude";
 
-  // Use cheaper model + lower budget for iterations on Claude
   const model = isIteration && isClaude ? ITERATION_MODEL : MODEL;
   const budget = isIteration ? ITERATION_BUDGET : MAX_BUDGET_PER_QUERY_USD;
 

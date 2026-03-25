@@ -34,12 +34,12 @@ export const claudeBackend: AgentBackend = async function* (
   );
   log(`CWD: ${config.projectDir}`);
 
-  yield {
-    type: "status",
-    message: `Budget: $${(config.maxBudgetUsd ?? 0).toFixed(2)}, max ${config.maxTurns} turns`,
-  };
-
   log(`Using model: ${config.model}, iteration: ${config.isIteration}`);
+
+  // Emit high-level status matching Ollama backend
+  if (!config.isIteration) {
+    yield { type: "status", message: "Generating initial site layout" };
+  }
 
   const q = query({
     prompt: config.prompt,
@@ -70,7 +70,7 @@ export const claudeBackend: AgentBackend = async function* (
       msg.subtype === "init"
     ) {
       sessionId = msg.session_id;
-      yield { type: "status", message: "Agent initialized", sessionId };
+      // Don't yield "Agent initialized" — not relevant to user
       continue;
     }
 
@@ -87,17 +87,14 @@ export const claudeBackend: AgentBackend = async function* (
           const detail =
             block.input?.file_path || block.input?.command || "";
           log(`  TOOL: ${block.name} ${detail}`);
-          yield {
-            type: "status",
-            message: `${block.name}: ${detail}`.trim(),
-          };
+          // Don't yield tool calls to chat — matches Ollama backend behavior
         }
         if (block.type === "text" && block.text) {
           const preview = block.text.slice(0, 120);
           log(
             `  TEXT: ${preview}${block.text.length > 120 ? "..." : ""}`,
           );
-          yield { type: "assistant", message: block.text };
+          // Don't yield assistant text — matches Ollama backend behavior
         }
       }
       continue;

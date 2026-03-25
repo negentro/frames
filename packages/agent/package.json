@@ -8,7 +8,8 @@
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "^0.1.77"
+    "@anthropic-ai/claude-agent-sdk": "^0.1.77",
+    "@anthropic-ai/sdk": "^0.80.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
