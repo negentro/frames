@@ -44,7 +44,10 @@ export function useGeneration() {
             msg.startsWith("Describing") ||
             msg.startsWith("Dependencies") ||
             msg.startsWith("Starting agent") ||
-            msg.startsWith("Starting iteration");
+            msg.startsWith("Starting iteration") ||
+            msg.startsWith("Planning") ||
+            msg.startsWith("Build ") ||
+            msg.startsWith("Committing");
           if (!isFiltered) {
             setStatus((prev) => ({
               ...prev,
