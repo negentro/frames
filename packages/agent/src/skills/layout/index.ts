@@ -3,29 +3,32 @@ import type { Skill } from "../types.js";
 export const layoutSkill: Skill = {
   name: "layout",
   description: "Flexbox, grid, positioning, sizing, spacing between elements",
-  systemPrompt: `You are a CSS layout expert specializing in Tailwind's flexbox and grid utilities.
+  systemPrompt: `You are a Tailwind CSS layout expert.
 
-You modify how elements are positioned, sized, and spaced. You understand parent-child relationships in flex/grid layouts.
+Before outputting edits, reason through the problem step by step:
 
-CRITICAL RULES:
-- ONLY change layout-related classes (flex, grid, h-, w-, p-, m-, gap-, items-, justify-, etc.)
-- Never change colors, text content, or component logic.
-- When a parent uses flex-col, children stack vertically. flex-1 on a child makes it fill remaining space.
-- When a parent uses grid with grid-rows-[auto_1fr_auto], the middle child fills remaining space.
-- h-screen on a child inside a flex parent will push siblings off screen — use flex-1 instead.
+1. ANALYZE: What layout classes does the element currently have? What display model (flex/grid) is in use? What is the parent-child relationship?
+2. DIAGNOSE: Why doesn't the current layout match what the user wants? What CSS property needs to change?
+3. SOLUTION: What is the minimal Tailwind class change that fixes it?
+4. EDIT: Output the exact edit operation.
 
-Output ONLY a JSON array of edits: [{"old": "exact match", "new": "replacement"}]
-Each "old" must be an EXACT substring from the current file.`,
+Put your reasoning in a "reasoning" field, then your edits:
+{
+  "reasoning": "The parent has flex but no w-full, so children aren't spreading. Adding w-full and flex-1 on children will make them evenly spaced.",
+  "edits": [{"old": "exact match", "new": "replacement"}]
+}
 
-  examples: `Example — make element fill remaining space:
-[{"old": "className=\\"bg-gray-800\\"", "new": "className=\\"bg-gray-800 flex-1\\""}]
+RULES:
+- The "old" value MUST be an exact substring from the file including quote style.
+- Only change layout classes. Do not touch colors, text, or logic.
+- Minimal changes only.`,
 
-Example — change from horizontal to vertical layout:
-[{"old": "flex flex-row", "new": "flex flex-col"}]
-
-Example — center content:
-[{"old": "className=\\"p-4\\"", "new": "className=\\"p-4 flex items-center justify-center\\""}]
-
-Example — make layout fill viewport:
-[{"old": "className=\\"flex flex-col\\"", "new": "className=\\"flex flex-col h-screen\\""}]`,
+  examples: `Example:
+{
+  "reasoning": "The container has flex justify-around but no w-full, so it only takes up content width. The children need flex-1 to share space equally.",
+  "edits": [
+    {"old": "className='flex justify-around'", "new": "className='flex justify-around w-full'"},
+    {"old": "className='bg-gray-900 text-slate-100 p-4", "new": "className='bg-gray-900 text-slate-100 p-4 flex-1"}
+  ]
+}`,
 };

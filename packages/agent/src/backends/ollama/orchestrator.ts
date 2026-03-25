@@ -129,6 +129,7 @@ CRITICAL RULES:
 - Do NOT create placeholder, example, or demo components. Every file must serve the user's request.
 - Do NOT create utility files unless absolutely necessary.
 - src/App.tsx MUST always be the LAST file in the plan. It imports and composes the components.
+- App.tsx MUST use this layout pattern: flex flex-col h-screen, with the main content section having flex-1 so it fills the remaining viewport space between header and footer.
 - All components go under src/components/. Use default exports.
 - Available libraries: react 19, react-dom 19, tailwindcss v4 (utility classes only), lucide-react, clsx.
 - Keep the app minimal. Prefer fewer files. A simple layout needs only components + App.tsx.

@@ -59,10 +59,15 @@ async function runCreateSubagent(
   const skill = getSkill(filePlan.skill || "component");
   const systemPrompt = filePlan.action === "create" ? CREATE_SYSTEM : skill.systemPrompt;
 
+  // Add layout guidance for App.tsx
+  const appGuidance = filePlan.path === "src/App.tsx"
+    ? "\n\nIMPORTANT: App.tsx must use className=\"flex flex-col h-screen\" on the outer div. The main content component (Hero/Main) must have className with flex-1 so it fills the space between header and footer.\n"
+    : "";
+
   const userPrompt = `${planContext}
 File to create: ${filePlan.path}
 Description: ${filePlan.description}
-${fileContext}
+${fileContext}${appGuidance}
 Write the complete content for ${filePlan.path}. Only output the file content, nothing else.`;
 
   const response = await chatCompletion(model, [
@@ -139,11 +144,18 @@ Output your edits for this file now.`;
   const raw = stripThinkTags(response.choices[0]?.message?.content || "");
   log(`Modify subagent raw response (${raw.length} chars): ${raw.slice(0, 300)}`);
 
-  // Try to parse as JSON edit operations first
+  // Try to parse as JSON edit operations
   const jsonStr = extractJSON(raw);
   if (jsonStr) {
     try {
-      const edits = JSON.parse(jsonStr) as Array<{ old: string; new: string }>;
+      const parsed = JSON.parse(jsonStr);
+      // Support both formats: plain array or {reasoning, edits} wrapper
+      const edits: Array<{ old: string; new: string }> = Array.isArray(parsed)
+        ? parsed
+        : parsed.edits || [];
+      if (parsed.reasoning) {
+        log(`Skill reasoning: ${parsed.reasoning.slice(0, 200)}`);
+      }
       let modified = currentContent;
       let appliedCount = 0;
       for (const edit of edits) {
@@ -152,7 +164,38 @@ Output your edits for this file now.`;
           appliedCount++;
           log(`Edit applied: "${edit.old.slice(0, 50)}" → "${edit.new.slice(0, 50)}"`);
         } else {
-          log(`Edit skipped (not found): "${edit.old.slice(0, 50)}"`);
+          // Try with swapped quotes (single ↔ double)
+          const altOld = edit.old.includes('"')
+            ? edit.old.replace(/"/g, "'")
+            : edit.old.replace(/'/g, '"');
+          if (modified.includes(altOld)) {
+            const altNew = edit.new.includes('"')
+              ? edit.new.replace(/"/g, "'")
+              : edit.new.replace(/'/g, '"');
+            modified = modified.replace(altOld, altNew);
+            appliedCount++;
+            log(`Edit applied (quote-swapped): "${altOld.slice(0, 50)}" → "${altNew.slice(0, 50)}"`);
+          } else {
+            // Try whitespace-normalized match
+            const normalizedOld = edit.old.replace(/\s+/g, " ").trim();
+            const normalizedFile = modified.replace(/\s+/g, " ");
+            if (normalizedFile.includes(normalizedOld)) {
+              // Find the actual substring in the original that matches when normalized
+              const regex = new RegExp(
+                edit.old.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(/\s+/g, "\\s+"),
+              );
+              const match = modified.match(regex);
+              if (match) {
+                modified = modified.replace(match[0], edit.new);
+                appliedCount++;
+                log(`Edit applied (whitespace-normalized): "${edit.old.slice(0, 50)}" → "${edit.new.slice(0, 50)}"`);
+              } else {
+                log(`Edit skipped (not found): "${edit.old.slice(0, 50)}"`);
+              }
+            } else {
+              log(`Edit skipped (not found): "${edit.old.slice(0, 50)}"`);
+            }
+          }
         }
       }
       if (appliedCount > 0) {
