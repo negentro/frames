@@ -68,7 +68,10 @@ async function describeImages(
     return "";
   });
 
-  if (images.length === 0) return prompt;
+  if (images.length === 0) {
+    console.log("[vision] No images in prompt, skipping vision");
+    return prompt;
+  }
 
   const isClaude = process.env.MODEL_PROVIDER === "claude";
   if (!isClaude) return prompt; // Ollama handles images in its own pipeline

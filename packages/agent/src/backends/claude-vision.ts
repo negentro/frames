@@ -6,9 +6,9 @@ const VISION_MODEL =
 export async function describeImageWithClaude(
   imageDataUrl: string,
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.ANTHROPIC_VISION_API_KEY;
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY env var is required");
+    throw new Error("ANTHROPIC_VISION_API_KEY env var is required for vision calls");
   }
 
   const match = imageDataUrl.match(/^data:(image\/[^;]+);base64,(.+)$/);
