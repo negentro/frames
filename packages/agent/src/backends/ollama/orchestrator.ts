@@ -16,6 +16,7 @@ import {
 export interface FilePlan {
   path: string;
   action: "create" | "modify";
+  skill: string;
   description: string;
 }
 
@@ -87,6 +88,7 @@ const PLAN_SCHEMA = `{
     {
       "path": "src/components/Example.tsx",
       "action": "create",
+      "skill": "component",
       "description": "Description of what this file should contain"
     }
   ]
@@ -124,6 +126,14 @@ CRITICAL RULES:
 - Only include files that actually need changes. Do NOT rewrite files that are already correct.
 - Prefer modifying existing files over creating new ones.
 - Every file you list MUST be implemented. Do not reference files that are not in your plan.
+
+Each file MUST have a "skill" field. Available skills:
+- "styling": Change colors, typography, spacing, borders, shadows (visual-only changes)
+- "layout": Change flexbox/grid, positioning, sizing, spacing between elements
+- "component": Create new components or rewrite component internals significantly
+- "integration": Wire components into App.tsx, manage imports and the JSX tree
+
+Choose the MOST SPECIFIC skill. "Change header color to red" → styling. "Make hero fill viewport" → layout. "Add a carousel" → component + integration.
 
 Respond with ONLY a JSON object matching this schema (no markdown, no explanation):
 ${PLAN_SCHEMA}`;
@@ -325,6 +335,7 @@ function parsePlan(text: string, fallbackPrompt: string, isIteration: boolean): 
       {
         path: "src/App.tsx",
         action: "create",
+        skill: "component",
         description: `Single-file app that implements: ${fallbackPrompt}. Use Tailwind utility classes for styling. Default export.`,
       },
     ],

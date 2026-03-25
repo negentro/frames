@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { chatCompletion, stripCodeFences, stripThinkTags, extractJSON, log } from "./shared.js";
 import type { FilePlan, OrchestratorPlan } from "./orchestrator.js";
+import { getSkill } from "../../skills/index.js";
 
 const CREATE_SYSTEM = `You are a code generator. Write the complete content for a single file.
 
@@ -17,24 +18,6 @@ Rules:
 - Only import files that exist in the project plan. Do NOT import files that are not listed.
 - Be concise. Write minimal code that works.`;
 
-const MODIFY_SYSTEM = `You output JSON edit operations to modify a file. You receive the current file content and an instruction.
-
-Output a JSON array of edits. Each edit replaces an exact string match:
-[
-  {"old": "exact string to find", "new": "replacement string"}
-]
-
-Rules:
-- The "old" value MUST be an exact substring from the current file.
-- Make the MINIMUM edits needed. Do not rewrite unrelated code.
-- Output ONLY the JSON array. No explanation.
-
-Example — to change a div's color from blue to red:
-[{"old": "bg-blue-500", "new": "bg-red-500"}]
-
-Example — to add a className:
-[{"old": "className=\\"flex\\"", "new": "className=\\"flex text-red-500\\""}]`;
-
 export async function runSubagent(
   model: string,
   filePlan: FilePlan,
@@ -42,7 +25,7 @@ export async function runSubagent(
   writtenFiles: Map<string, string>,
   plan: OrchestratorPlan,
 ): Promise<{ path: string; content: string }> {
-  log(`Subagent: ${filePlan.action} ${filePlan.path}`);
+  log(`Subagent: ${filePlan.action} ${filePlan.path} [skill: ${filePlan.skill || "general"}]`);
 
   if (filePlan.action === "modify") {
     return runModifySubagent(model, filePlan, projectDir);
@@ -72,6 +55,10 @@ async function runCreateSubagent(
     }
   }
 
+  // For component creation, use the component skill's system prompt if available
+  const skill = getSkill(filePlan.skill || "component");
+  const systemPrompt = filePlan.action === "create" ? CREATE_SYSTEM : skill.systemPrompt;
+
   const userPrompt = `${planContext}
 File to create: ${filePlan.path}
 Description: ${filePlan.description}
@@ -79,7 +66,7 @@ ${fileContext}
 Write the complete content for ${filePlan.path}. Only output the file content, nothing else.`;
 
   const response = await chatCompletion(model, [
-    { role: "system", content: CREATE_SYSTEM },
+    { role: "system", content: systemPrompt },
     { role: "user", content: userPrompt },
   ]);
 
@@ -111,6 +98,10 @@ async function runModifySubagent(
     return { path: filePlan.path, content: stripCodeFences(raw) };
   }
 
+  // Load the skill persona
+  const skill = getSkill(filePlan.skill || "general");
+  log(`Using skill: ${skill.name}`);
+
   const userPrompt = `Current file ${filePlan.path}:
 \`\`\`
 ${currentContent}
@@ -118,17 +109,19 @@ ${currentContent}
 
 Instruction: ${filePlan.description}
 
-Output a JSON array of edits to apply.`;
+${skill.examples}
+
+Output your edits for this file now.`;
 
   const response = await chatCompletion(model, [
-    { role: "system", content: MODIFY_SYSTEM },
+    { role: "system", content: skill.systemPrompt },
     { role: "user", content: userPrompt },
   ]);
 
   const raw = stripThinkTags(response.choices[0]?.message?.content || "");
-  log(`Modify subagent raw response: ${raw.slice(0, 300)}`);
+  log(`Modify subagent raw response (${raw.length} chars): ${raw.slice(0, 300)}`);
 
-  // Parse edit operations
+  // Try to parse as JSON edit operations first
   const jsonStr = extractJSON(raw);
   if (jsonStr) {
     try {
@@ -148,13 +141,21 @@ Output a JSON array of edits to apply.`;
         log(`Modify subagent: ${appliedCount}/${edits.length} edits applied for ${filePlan.path}`);
         return { path: filePlan.path, content: modified };
       }
-      log(`No edits applied, falling back to full rewrite`);
     } catch (err) {
       log(`Edit parse error: ${err instanceof Error ? err.message : err}`);
     }
   }
 
-  // Fallback: if edit parsing fails, return current content unchanged
-  log(`Modify subagent: keeping ${filePlan.path} unchanged (edit parsing failed)`);
+  // If the skill is "component" and no JSON edits, the response might be a full rewrite
+  if (filePlan.skill === "component") {
+    const content = stripCodeFences(raw);
+    if (content.length > 20 && (content.includes("export") || content.includes("function"))) {
+      log(`Component skill: accepting full rewrite for ${filePlan.path}`);
+      return { path: filePlan.path, content };
+    }
+  }
+
+  // Fallback: keep file unchanged
+  log(`Modify subagent: keeping ${filePlan.path} unchanged (no valid edits)`);
   return { path: filePlan.path, content: currentContent };
 }
