@@ -108,9 +108,19 @@ function buildSystemPrompt(isIteration: boolean, hasImages: boolean): string {
     ? `You have access to tools:\n${tools.join("\n")}\n\nUse these tools first to understand the context, then return your plan.\n\n`
     : "";
 
+  const iterationGuidance = isIteration
+    ? `You are given the current source files. Plan ONLY the minimal changes needed.
+- If the user asks to change a color, only modify the ONE file containing that color.
+- If the user asks to restructure a component, modify that component file and possibly its parent.
+- NEVER rewrite App.tsx unless the user explicitly asks to change the page layout or add/remove sections.
+- When modifying, your description must be a SPECIFIC edit instruction, not a vague request.
+
+`
+    : "";
+
   return `You are a project planner for React + TypeScript apps with Tailwind v4.
 
-${toolSection}Given a user's request, return a JSON plan listing every file that needs to be created or modified under src/.
+${toolSection}${iterationGuidance}Given a user's request, return a JSON plan listing every file that needs to be created or modified under src/.
 
 CRITICAL RULES:
 - Do NOT include src/main.tsx or src/index.css in the plan. They are pre-generated.
@@ -152,8 +162,36 @@ export async function runOrchestrator(
   const imageMap = new Map<string, string>();
   images.forEach((img, i) => imageMap.set(`image_${i + 1}`, img));
 
+  // For iterations, read all current source files and include them in the prompt
+  // so the orchestrator doesn't need to use Read tools
+  let projectContext = "";
+  if (isIteration) {
+    try {
+      const { execSync } = await import("node:child_process");
+      const files = execSync("find src -name '*.tsx' -o -name '*.ts' | grep -v node_modules | sort", {
+        cwd: projectDir,
+        encoding: "utf-8",
+      }).trim().split("\n").filter(Boolean);
+
+      for (const file of files) {
+        if (file === "src/main.tsx") continue;
+        try {
+          const { readFile } = await import("node:fs/promises");
+          const content = await readFile(join(projectDir, file), "utf-8");
+          if (content.length < 2000) {
+            projectContext += `\n${file}:\n\`\`\`\n${content}\n\`\`\`\n`;
+          }
+        } catch { /* skip */ }
+      }
+    } catch { /* skip */ }
+  }
+
   // Build user prompt — reference images by ID, not raw data
   let userPrompt = text;
+
+  if (isIteration && projectContext) {
+    userPrompt += `\n\nCurrent project files:\n${projectContext}`;
+  }
   if (images.length > 0) {
     if (isIteration) {
       userPrompt +=

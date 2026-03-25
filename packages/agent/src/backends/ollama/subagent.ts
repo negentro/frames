@@ -28,7 +28,7 @@ export async function runSubagent(
   log(`Subagent: ${filePlan.action} ${filePlan.path} [skill: ${filePlan.skill || "general"}]`);
 
   if (filePlan.action === "modify") {
-    return runModifySubagent(model, filePlan, projectDir);
+    return runModifySubagent(model, filePlan, projectDir, writtenFiles, plan);
   }
   return runCreateSubagent(model, filePlan, projectDir, writtenFiles, plan);
 }
@@ -80,6 +80,8 @@ async function runModifySubagent(
   model: string,
   filePlan: FilePlan,
   projectDir: string,
+  writtenFiles: Map<string, string>,
+  plan: OrchestratorPlan,
 ): Promise<{ path: string; content: string }> {
   let currentContent = "";
   try {
@@ -98,15 +100,31 @@ async function runModifySubagent(
     return { path: filePlan.path, content: stripCodeFences(raw) };
   }
 
+  // Build context about newly created files in this plan
+  let newFilesContext = "";
+  for (const [path, content] of writtenFiles) {
+    if (path !== filePlan.path && path !== "src/main.tsx" && content.length < 3000) {
+      newFilesContext += `\nNewly created ${path}:\n\`\`\`\n${content}\n\`\`\`\n`;
+    }
+  }
+
+  // Include plan context so the agent knows what other files exist
+  const planContext = plan.files
+    .map((f) => `- ${f.path} (${f.action}): ${f.description}`)
+    .join("\n");
+
   // Load the skill persona
   const skill = getSkill(filePlan.skill || "general");
   log(`Using skill: ${skill.name}`);
 
-  const userPrompt = `Current file ${filePlan.path}:
+  const userPrompt = `Plan context:
+${planContext}
+
+Current file ${filePlan.path}:
 \`\`\`
 ${currentContent}
 \`\`\`
-
+${newFilesContext}
 Instruction: ${filePlan.description}
 
 ${skill.examples}
