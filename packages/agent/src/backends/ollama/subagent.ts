@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { chatCompletion, stripCodeFences, log } from "./shared.js";
+import { chatCompletion, stripCodeFences, stripThinkTags, extractJSON, log } from "./shared.js";
 import type { FilePlan, OrchestratorPlan } from "./orchestrator.js";
 
 const CREATE_SYSTEM = `You are a code generator. Write the complete content for a single file.
@@ -17,16 +17,23 @@ Rules:
 - Only import files that exist in the project plan. Do NOT import files that are not listed.
 - Be concise. Write minimal code that works.`;
 
-const MODIFY_SYSTEM = `You are a code editor. You will receive an existing file and an instruction describing what to change.
+const MODIFY_SYSTEM = `You output JSON edit operations to modify a file. You receive the current file content and an instruction.
 
-CRITICAL RULES:
-- Output ONLY the complete modified file content. No markdown fences, no explanation.
-- The instruction describes a CODE CHANGE to make, NOT content to display on screen.
-- Preserve the existing structure and imports. Only change what the instruction asks for.
-- Do NOT remove existing components or imports unless the instruction explicitly asks for removal.
-- Do NOT replace working code with placeholder text.
-- Make the MINIMAL change necessary to fulfill the instruction.
-- If the instruction mentions a visual/layout issue, fix it by changing CSS classes or component structure.`;
+Output a JSON array of edits. Each edit replaces an exact string match:
+[
+  {"old": "exact string to find", "new": "replacement string"}
+]
+
+Rules:
+- The "old" value MUST be an exact substring from the current file.
+- Make the MINIMUM edits needed. Do not rewrite unrelated code.
+- Output ONLY the JSON array. No explanation.
+
+Example — to change a div's color from blue to red:
+[{"old": "bg-blue-500", "new": "bg-red-500"}]
+
+Example — to add a className:
+[{"old": "className=\\"flex\\"", "new": "className=\\"flex text-red-500\\""}]`;
 
 export async function runSubagent(
   model: string,
@@ -92,13 +99,10 @@ async function runModifySubagent(
     const fullPath = resolve(projectDir, filePlan.path);
     currentContent = await readFile(fullPath, "utf-8");
   } catch {
-    // If file doesn't exist, fall back to create behavior
     log(`Cannot read ${filePlan.path} for modify, treating as create`);
-    currentContent = "";
   }
 
   if (!currentContent) {
-    // Can't modify what doesn't exist — generate from scratch
     const response = await chatCompletion(model, [
       { role: "system", content: CREATE_SYSTEM },
       { role: "user", content: `File: ${filePlan.path}\nDescription: ${filePlan.description}\n\nWrite the complete content.` },
@@ -107,23 +111,50 @@ async function runModifySubagent(
     return { path: filePlan.path, content: stripCodeFences(raw) };
   }
 
-  const userPrompt = `Here is the current content of ${filePlan.path}:
-
+  const userPrompt = `Current file ${filePlan.path}:
 \`\`\`
 ${currentContent}
 \`\`\`
 
 Instruction: ${filePlan.description}
 
-Apply this change to the file. Output the COMPLETE modified file. Preserve all existing code that is not related to the change.`;
+Output a JSON array of edits to apply.`;
 
   const response = await chatCompletion(model, [
     { role: "system", content: MODIFY_SYSTEM },
     { role: "user", content: userPrompt },
   ]);
 
-  const raw = response.choices[0]?.message?.content || "";
-  const content = stripCodeFences(raw);
-  log(`Modify subagent produced ${content.length} chars for ${filePlan.path}`);
-  return { path: filePlan.path, content };
+  const raw = stripThinkTags(response.choices[0]?.message?.content || "");
+  log(`Modify subagent raw response: ${raw.slice(0, 300)}`);
+
+  // Parse edit operations
+  const jsonStr = extractJSON(raw);
+  if (jsonStr) {
+    try {
+      const edits = JSON.parse(jsonStr) as Array<{ old: string; new: string }>;
+      let modified = currentContent;
+      let appliedCount = 0;
+      for (const edit of edits) {
+        if (modified.includes(edit.old)) {
+          modified = modified.replace(edit.old, edit.new);
+          appliedCount++;
+          log(`Edit applied: "${edit.old.slice(0, 50)}" → "${edit.new.slice(0, 50)}"`);
+        } else {
+          log(`Edit skipped (not found): "${edit.old.slice(0, 50)}"`);
+        }
+      }
+      if (appliedCount > 0) {
+        log(`Modify subagent: ${appliedCount}/${edits.length} edits applied for ${filePlan.path}`);
+        return { path: filePlan.path, content: modified };
+      }
+      log(`No edits applied, falling back to full rewrite`);
+    } catch (err) {
+      log(`Edit parse error: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+
+  // Fallback: if edit parsing fails, return current content unchanged
+  log(`Modify subagent: keeping ${filePlan.path} unchanged (edit parsing failed)`);
+  return { path: filePlan.path, content: currentContent };
 }

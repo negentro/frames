@@ -74,7 +74,8 @@ async function describeImages(
   }
 
   const isClaude = process.env.MODEL_PROVIDER === "claude";
-  if (!isClaude) return prompt; // Ollama handles images in its own pipeline
+  // Ollama: let the orchestrator handle images via DescribeImage tool
+  if (!isClaude) return prompt;
 
   events.push({ type: "status", message: "Analyzing wireframe" });
 

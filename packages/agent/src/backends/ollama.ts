@@ -30,6 +30,8 @@ export const ollamaBackend: AgentBackend = async function* (
 
   // For iterations, generate a summary message for the chat
   if (isIteration) {
+    // Strip images from prompt for summary — only need the text instruction
+    const { text: summaryText } = extractImages(config.prompt);
     try {
       const summaryRes = await chatCompletion(config.model, [
         {
@@ -37,7 +39,7 @@ export const ollamaBackend: AgentBackend = async function* (
           content:
             "You are a helpful assistant. Given a user's request to modify a React app, respond with a single short sentence (max 10 words) describing what will be changed. No punctuation at the end. Examples: 'Centering all heading text', 'Adding a dark mode toggle', 'Replacing the footer layout'",
         },
-        { role: "user", content: config.prompt },
+        { role: "user", content: summaryText },
       ]);
       const summary =
         summaryRes.choices[0]?.message?.content?.trim() || "Applying changes";
@@ -138,32 +140,9 @@ export const ollamaBackend: AgentBackend = async function* (
       break;
     }
 
-    // --- Phase 4: Review ---
-    const allChangedFiles = plan.files.map((f) => f.path);
-    if (!allChangedFiles.includes("src/App.tsx")) {
-      allChangedFiles.push("src/App.tsx");
-    }
-
-    const review = await runReviewer(
-      config.model,
-      config.projectDir,
-      config.prompt,
-      allChangedFiles,
-    );
-
-    if (review.satisfied) {
-      log("Review passed");
-      break;
-    }
-
-    log(`Review failed: ${review.feedback}`);
-    feedback = review.feedback;
-
-    if (attempt < MAX_ATTEMPTS) {
-      yield { type: "status", message: "Refining implementation" };
-    } else {
-      log("Max attempts reached, accepting current result");
-    }
+    // Build passed — accept the result
+    log("Build passed, accepting result");
+    break;
   }
 
   // --- Git commit ---

@@ -145,9 +145,16 @@ export async function runOrchestrator(
   // Build user prompt — reference images by ID, not raw data
   let userPrompt = text;
   if (images.length > 0) {
-    userPrompt +=
-      "\n\nThe user provided wireframe image(s). Use the DescribeImage tool to analyze them before planning:\n" +
-      images.map((_, i) => `- image_${i + 1}`).join("\n");
+    if (isIteration) {
+      userPrompt +=
+        "\n\nThe user drew annotations on the preview to indicate which parts of the page to change. " +
+        "Use the DescribeImage tool to see the annotations, then plan changes based on both the text instruction and the annotations:\n" +
+        images.map((_, i) => `- image_${i + 1}`).join("\n");
+    } else {
+      userPrompt +=
+        "\n\nThe user provided wireframe image(s). Use the DescribeImage tool to analyze them before planning:\n" +
+        images.map((_, i) => `- image_${i + 1}`).join("\n");
+    }
   }
 
   const hasImages = images.length > 0;
@@ -221,11 +228,14 @@ export async function runOrchestrator(
         if (tc.name === "DescribeImage") {
           const imageId = tc.arguments.image_id as string;
           const dataUrl = imageMap.get(imageId);
+          log(`DescribeImage: imageId=${imageId}, found=${!!dataUrl}, dataUrl length=${dataUrl?.length ?? 0}`);
           if (!dataUrl) {
             result = `Error: unknown image_id "${imageId}"`;
           } else {
-            events.push({ type: "status", message: "Analyzing wireframe" });
+            events.push({ type: "status", message: "Analyzing image" });
+            log(`Calling vision model ${VISION_MODEL}...`);
             result = await describeImage(dataUrl, VISION_MODEL);
+            log(`Vision result (${result.length} chars): ${result.slice(0, 200)}`);
           }
         } else {
           result = await executeTool(tc.name, tc.arguments, projectDir);

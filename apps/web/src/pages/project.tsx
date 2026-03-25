@@ -25,6 +25,7 @@ export function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+
   const { status, generate, iterate } = useGeneration();
   const chatEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -134,7 +135,7 @@ export function ProjectPage() {
     setInput("");
     addMessage("user", instruction);
     iterate(id, instruction);
-  }, [input, id, status.phase, iterate]);
+  }, [input, id, status.phase, iterate, addMessage]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
