@@ -294,11 +294,11 @@ export function ProjectPage() {
         </div>
 
         {/* Input */}
-        <div className="border-t border-neutral-800 p-3">
-          <div className="flex gap-2">
+        <div className="border-t border-neutral-800 p-4">
+          <div className="rounded-lg bg-neutral-900 focus-within:ring-1 focus-within:ring-neutral-600">
             <textarea
               ref={inputRef}
-              className="flex-1 resize-none rounded-lg bg-neutral-900 px-3 py-2 text-sm text-white placeholder-neutral-500 outline-none focus:ring-1 focus:ring-neutral-600"
+              className="w-full resize-none bg-transparent px-3 pt-3 pb-1 text-sm text-white placeholder-neutral-500 outline-none"
               placeholder="Describe changes..."
               rows={2}
               value={input}
@@ -309,16 +309,18 @@ export function ProjectPage() {
               disabled={status.phase === "generating"}
               maxLength={500}
             />
-            <button
-              className="self-end rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-neutral-200 disabled:opacity-30"
-              onClick={handleSend}
-              disabled={!input.trim() || status.phase === "generating"}
-            >
-              Send
-            </button>
-          </div>
-          <div className={`mt-1 text-right text-xs ${input.length > 450 ? "text-amber-400" : "text-neutral-600"}`}>
-            {input.length}/500
+            <div className="flex items-center justify-end gap-2 px-2 pb-2">
+              <span className={`text-xs ${input.length > 450 ? "text-amber-400" : "text-neutral-600"}`}>
+                {input.length}/500
+              </span>
+              <button
+                className="rounded-md bg-white px-3 py-1 text-xs font-medium text-black transition hover:bg-neutral-200 disabled:opacity-30"
+                onClick={handleSend}
+                disabled={!input.trim() || status.phase === "generating"}
+              >
+                Send
+              </button>
+            </div>
           </div>
         </div>
       </div>
