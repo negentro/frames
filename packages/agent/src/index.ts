@@ -54,7 +54,7 @@ function writeSSE(res: http.ServerResponse, event: string, data: unknown) {
 }
 
 const REQUEST_TIMEOUT_MS = Number(
-  process.env.EIGEN_REQUEST_TIMEOUT_MS || "300000", // 5 minutes default
+  process.env.EIGEN_REQUEST_TIMEOUT_MS || "600000", // 10 minutes default
 );
 
 async function streamAgentEvents(
