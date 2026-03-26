@@ -302,9 +302,12 @@ export function ProjectPage() {
               placeholder="Describe changes..."
               rows={2}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                if (e.target.value.length <= 500) setInput(e.target.value);
+              }}
               onKeyDown={handleKeyDown}
               disabled={status.phase === "generating"}
+              maxLength={500}
             />
             <button
               className="self-end rounded-lg bg-white px-4 py-2 text-sm font-medium text-black transition hover:bg-neutral-200 disabled:opacity-30"
@@ -313,6 +316,9 @@ export function ProjectPage() {
             >
               Send
             </button>
+          </div>
+          <div className={`mt-1 text-right text-xs ${input.length > 450 ? "text-amber-400" : "text-neutral-600"}`}>
+            {input.length}/500
           </div>
         </div>
       </div>

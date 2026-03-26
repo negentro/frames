@@ -76,7 +76,7 @@ projects.post("/:id/messages", async (c) => {
   const body = await c.req.json<{ role: string; content: string }>();
   const err = validate(body, [
     { field: "role", type: "string", required: true, maxLength: 20 },
-    { field: "content", type: "string", required: true, maxLength: 5000 },
+    { field: "content", type: "string", required: true, maxLength: 500 },
   ]);
   if (err) return c.json({ error: err }, 400);
 
