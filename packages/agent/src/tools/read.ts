@@ -1,16 +1,15 @@
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { safePath } from "./safepath.js";
 
 export async function readTool(
   args: { file_path: string },
   projectDir: string,
 ): Promise<string> {
-  const resolved = resolve(projectDir, args.file_path);
-  if (!resolved.startsWith(projectDir)) {
-    return `Error: path "${args.file_path}" is outside the project directory`;
-  }
+  const path = safePath(projectDir, args.file_path);
+  if (!path.ok) return `Error: ${path.error}`;
+
   try {
-    const content = await readFile(resolved, "utf-8");
+    const content = await readFile(path.resolved, "utf-8");
     if (content.length > 4000) {
       return content.slice(0, 4000) + "\n...(truncated)";
     }

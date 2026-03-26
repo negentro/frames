@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(npx tsc:*)",
+      "Read(//private/tmp/eigen-projects/78fed2e6-c4eb-47a2-9158-f1fc473fbbf8/**)",
+      "Bash(npm run:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(for f:*)",
+      "Bash(do echo:*)",
+      "Read(//Users/awmb/Documents/genesis/eigen/**)",
+      "Bash(done)"
+    ]
+  }
+}
