@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router";
-import { api, getPreviewUrl, type ProjectDetail } from "../lib/api";
+import { api, getPreviewUrl, undoOnAgent, type ProjectDetail } from "../lib/api";
 import { useGeneration } from "../hooks/use-generation";
 
 interface ChatMessage {
@@ -25,6 +25,7 @@ export function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
+  const [undoing, setUndoing] = useState(false);
 
   const { status, generate, iterate } = useGeneration();
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -129,13 +130,60 @@ export function ProjectPage() {
   }, [messages]);
 
   const handleSend = useCallback(() => {
-    if (!input.trim() || !id || status.phase === "generating") return;
+    if (!input.trim() || !id || status.phase === "generating" || undoing) return;
 
     const instruction = input.trim();
     setInput("");
     addMessage("user", instruction);
     iterate(id, instruction);
   }, [input, id, status.phase, iterate, addMessage]);
+
+  const canUndo =
+    !undoing &&
+    status.phase !== "generating" &&
+    project &&
+    (project.builds?.filter((b) => b.status === "ready").length ?? 0) >= 2;
+
+  const handleUndo = useCallback(async () => {
+    if (!id || !canUndo) return;
+    setUndoing(true);
+
+    try {
+      // 1. Get the previous build ID and the undone message from API
+      const result = await api.generate.undo(id);
+
+      // 2. Revert git + rebuild + upload on agent server
+      await undoOnAgent(id, result.previousBuildId);
+
+      // 3. Put the undone message back in the input
+      if (result.undoneMessage) {
+        setInput(result.undoneMessage);
+      }
+
+      // 4. Remove the last user + system messages from local state
+      setMessages((prev) => {
+        // Find the last user message index
+        let lastUserIdx = -1;
+        for (let i = prev.length - 1; i >= 0; i--) {
+          if (prev[i].role === "user") {
+            lastUserIdx = i;
+            break;
+          }
+        }
+        if (lastUserIdx === -1) return prev;
+        // Remove everything from that user message onwards
+        return prev.slice(0, lastUserIdx);
+      });
+
+      // 5. Refetch project to get updated builds
+      const updated = await api.projects.get(id);
+      setProject(updated);
+    } catch (err) {
+      console.error("Undo failed:", err);
+    } finally {
+      setUndoing(false);
+    }
+  }, [id, canUndo]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -185,6 +233,27 @@ export function ProjectPage() {
           >
             &larr;
           </button>
+          {canUndo && (
+            <button
+              className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-neutral-400 transition hover:bg-neutral-800 hover:text-white disabled:opacity-30"
+              onClick={handleUndo}
+              disabled={undoing}
+            >
+              <span>{undoing ? "Undoing" : "Undo"}</span>
+              <svg
+                className={`h-3.5 w-3.5 ${undoing ? "animate-spin" : ""}`}
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                <path d="M3 3v5h5" />
+              </svg>
+            </button>
+          )}
         </div>
 
         <div className="flex-1 bg-neutral-950">
@@ -306,7 +375,7 @@ export function ProjectPage() {
                 if (e.target.value.length <= 500) setInput(e.target.value);
               }}
               onKeyDown={handleKeyDown}
-              disabled={status.phase === "generating"}
+              disabled={status.phase === "generating" || undoing}
               maxLength={500}
             />
             <div className="flex items-center justify-end gap-2 px-2 pb-2">
@@ -316,7 +385,7 @@ export function ProjectPage() {
               <button
                 className="rounded-md bg-white px-3 py-1 text-xs font-medium text-black transition hover:bg-neutral-200 disabled:opacity-30"
                 onClick={handleSend}
-                disabled={!input.trim() || status.phase === "generating"}
+                disabled={!input.trim() || status.phase === "generating" || undoing}
               >
                 Send
               </button>

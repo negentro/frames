@@ -95,6 +95,11 @@ export const api = {
         method: "POST",
         body: JSON.stringify({ buildId }),
       }),
+    undo: (projectId: string) =>
+      request<{ ok: boolean; previousBuildId: string; undoneMessage: string }>(
+        `/api/generate/${projectId}/undo`,
+        { method: "POST" },
+      ),
   },
 };
 
@@ -173,6 +178,18 @@ export function streamFromAgent(
     });
 
   return controller;
+}
+
+export async function undoOnAgent(
+  projectId: string,
+  buildId: string,
+): Promise<{ ok: boolean }> {
+  const res = await fetch(`${AGENT_BASE}/undo`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ projectId, buildId }),
+  });
+  return res.json() as Promise<{ ok: boolean }>;
 }
 
 export function getPreviewUrl(projectId: string, buildId: string): string {

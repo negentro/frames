@@ -184,6 +184,52 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Undo last change — revert to previous commit, rebuild, upload
+    if (req.method === "POST" && req.url === "/undo") {
+      const { projectId, buildId } = JSON.parse(body);
+      console.log(`\n=== UNDO projectId=${projectId} ===`);
+
+      const projectDir = join(PROJECTS_DIR, projectId);
+      if (!existsSync(projectDir)) {
+        res.writeHead(404, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Project not found" }));
+        return;
+      }
+
+      try {
+        // Check we have more than one commit (initial + at least one iteration)
+        const commitCount = execSync("git rev-list --count HEAD", {
+          cwd: projectDir,
+          encoding: "utf-8",
+        }).trim();
+
+        if (parseInt(commitCount) <= 2) {
+          // 1 = initial setup, 2 = initial generation — don't undo these
+          res.writeHead(400, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Cannot undo initial generation" }));
+          return;
+        }
+
+        // Reset to previous commit
+        execSync("git reset --hard HEAD~1", { cwd: projectDir, stdio: "pipe" });
+
+        // Rebuild
+        execSync("npm run build", { cwd: projectDir, stdio: "pipe", timeout: 60000 });
+
+        // Upload new build to R2
+        await uploadBuildToR2(projectId, buildId, projectDir);
+
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Undo failed";
+        console.error(`Undo error: ${msg}`);
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: msg }));
+      }
+      return;
+    }
+
     // Serve build artifacts: GET /builds/:projectId/*
     if (req.method === "GET" && req.url?.startsWith("/builds/")) {
       const pathParts = req.url.slice("/builds/".length);

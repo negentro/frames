@@ -119,4 +119,53 @@ generate.post("/:id/error", async (c) => {
   return c.json({ ok: true });
 });
 
+// Undo last iteration — delete latest build and its messages, revert to previous build
+generate.post("/:id/undo", async (c) => {
+  const { id: projectId } = c.req.param();
+
+  // Get the last two builds (latest to delete, previous to restore)
+  const builds = await c.env.DB.prepare(
+    "SELECT id FROM builds WHERE project_id = ? ORDER BY created_at DESC LIMIT 2",
+  )
+    .bind(projectId)
+    .all<{ id: string }>();
+
+  if (builds.results.length < 2) {
+    return c.json({ error: "Cannot undo initial generation" }, 400);
+  }
+
+  const latestBuildId = builds.results[0].id;
+  const previousBuildId = builds.results[1].id;
+
+  // Get the latest user message (to return to the input box)
+  const lastUserMsg = await c.env.DB.prepare(
+    "SELECT content FROM messages WHERE project_id = ? AND role = 'user' ORDER BY created_at DESC, id DESC LIMIT 1",
+  )
+    .bind(projectId)
+    .first<{ content: string }>();
+
+  // Delete the latest build, its usage, and the last pair of messages (user + system)
+  // Find messages after the previous build's timestamp
+  await c.env.DB.batch([
+    c.env.DB.prepare("DELETE FROM builds WHERE id = ?").bind(latestBuildId),
+    c.env.DB.prepare("DELETE FROM usage WHERE build_id = ?").bind(latestBuildId),
+    // Delete the last user message and all system messages after it
+    c.env.DB.prepare(
+      "DELETE FROM messages WHERE project_id = ? AND id >= (SELECT MAX(id) FROM messages WHERE project_id = ? AND role = 'user')",
+    ).bind(projectId, projectId),
+    c.env.DB.prepare(
+      "UPDATE projects SET status = 'ready', updated_at = datetime('now') WHERE id = ?",
+    ).bind(projectId),
+    c.env.DB.prepare(
+      "UPDATE builds SET status = 'ready' WHERE id = ?",
+    ).bind(previousBuildId),
+  ]);
+
+  return c.json({
+    ok: true,
+    previousBuildId,
+    undoneMessage: lastUserMsg?.content || "",
+  });
+});
+
 export { generate };
