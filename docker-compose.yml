@@ -5,6 +5,8 @@ services:
       dockerfile: apps/api/Dockerfile
     ports:
       - "8788:8788"
+    volumes:
+      - wrangler-state:/app/.wrangler/state
     environment:
       - AGENT_URL=http://agent:8787
       - INTERNAL_API_KEY=eigen-local-dev-key
@@ -21,3 +23,6 @@ services:
       - PORT=8787
       - PROJECTS_DIR=/tmp/eigen-projects
       - API_URL=http://api:8788
+
+volumes:
+  wrangler-state:
