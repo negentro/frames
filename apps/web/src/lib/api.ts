@@ -176,7 +176,5 @@ export function streamFromAgent(
 }
 
 export function getPreviewUrl(projectId: string, buildId: string): string {
-  // In local dev, serve directly from agent server (R2 proxy has wrangler dev issues)
-  // In production, this would point to the API server's R2 preview proxy
-  return `${AGENT_BASE}/builds/${projectId}/?b=${buildId}`;
+  return `${API_BASE}/api/preview/${projectId}/builds/${buildId}/`;
 }
