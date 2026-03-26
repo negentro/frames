@@ -5,7 +5,7 @@ const generate = new Hono<App>();
 
 // Create project and build records, return IDs for the frontend to stream from agent directly
 generate.post("/", async (c) => {
-  const body = await c.req.json<{ name: string; image: string }>();
+  const body = await c.req.json<{ name: string }>();
   const projectId = crypto.randomUUID();
   const buildId = crypto.randomUUID();
 

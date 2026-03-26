@@ -35,7 +35,7 @@ export function HomePage() {
         try {
           const dataUrl = reader.result as string;
           const name = `Project ${new Date().toLocaleString()}`;
-          const { projectId, buildId } = await api.generate.create(name, dataUrl);
+          const { projectId, buildId } = await api.generate.create(name);
           navigate(`/project/${projectId}`, {
             state: { image: dataUrl, buildId, autoGenerate: true },
           });

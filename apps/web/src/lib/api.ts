@@ -68,10 +68,10 @@ export const api = {
       }),
   },
   generate: {
-    create: (name: string, image: string) =>
+    create: (name: string) =>
       request<{ projectId: string; buildId: string }>("/api/generate", {
         method: "POST",
-        body: JSON.stringify({ name, image }),
+        body: JSON.stringify({ name }),
       }),
     createIteration: (projectId: string, instruction: string, annotation?: string) =>
       request<{ projectId: string; buildId: string }>(
