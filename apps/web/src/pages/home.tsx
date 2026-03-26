@@ -2,6 +2,10 @@ import { useCallback, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { api } from "../lib/api";
 
+const ACCEPTED_TYPES = ["image/png", "image/jpeg", "image/webp"];
+const MAX_FILE_SIZE_MB = 5;
+const MAX_FILE_SIZE = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 export function HomePage() {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -12,6 +16,16 @@ export function HomePage() {
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
+
+      if (!ACCEPTED_TYPES.includes(file.type)) {
+        setError(`Unsupported file type: ${file.type}. Use PNG, JPEG, or WebP.`);
+        return;
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is ${MAX_FILE_SIZE_MB}MB.`);
+        return;
+      }
 
       setCreating(true);
       setError(null);
@@ -49,10 +63,13 @@ export function HomePage() {
       >
         Upload Wireframe
       </button>
+      <p className="text-xs text-neutral-500">
+        PNG, JPEG, or WebP — max {MAX_FILE_SIZE_MB}MB
+      </p>
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept=".png,.jpg,.jpeg,.webp"
         className="hidden"
         onChange={handleUpload}
       />

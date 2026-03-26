@@ -88,11 +88,23 @@ async function streamAgentEvents(
   }
 }
 
+const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB max request body
+
 function parseBody(req: http.IncomingMessage): Promise<string> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", (chunk: Buffer) => { data += chunk.toString(); });
+    let size = 0;
+    req.on("data", (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        req.destroy();
+        reject(new Error(`Request body exceeds ${MAX_BODY_SIZE / 1024 / 1024}MB limit`));
+        return;
+      }
+      data += chunk.toString();
+    });
     req.on("end", () => resolve(data));
+    req.on("error", reject);
   });
 }
 
