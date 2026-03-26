@@ -11,8 +11,9 @@ export function safePath(
   projectDir: string,
   filePath: string,
 ): { ok: true; resolved: string } | { ok: false; error: string } {
-  const resolved = resolve(projectDir, filePath);
+  // Resolve the project dir to its real path first (handles /tmp → /private/tmp on macOS)
   const realProjectDir = realpathSync(projectDir);
+  const resolved = resolve(realProjectDir, filePath);
 
   // Basic prefix check (catches ../ traversal)
   if (!resolved.startsWith(realProjectDir + "/") && resolved !== realProjectDir) {
@@ -21,7 +22,6 @@ export function safePath(
 
   // If the file exists, check its real path (follows symlinks)
   if (existsSync(resolved)) {
-    // Check if it's a symlink
     const stat = lstatSync(resolved);
     if (stat.isSymbolicLink()) {
       return { ok: false, error: `Path "${filePath}" is a symlink — not allowed` };
@@ -34,7 +34,6 @@ export function safePath(
   }
 
   // For new files, check that the parent directory is within project
-  // (the file doesn't exist yet, but the parent might be a symlink)
   const parent = resolve(resolved, "..");
   if (existsSync(parent)) {
     const realParent = realpathSync(parent);
