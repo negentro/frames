@@ -52,16 +52,16 @@ export function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-8">
-      <h1 className="text-5xl font-bold tracking-tight">Eigen</h1>
+      <h1 className="text-5xl font-bold tracking-tight">frames ⧉</h1>
       <p className="text-lg text-neutral-400">
-        Transform wireframes into production UI
+        wireframes to webframes
       </p>
       <button
         className="rounded-lg bg-white px-6 py-3 font-medium text-black transition hover:bg-neutral-200 disabled:opacity-50"
         onClick={() => fileInputRef.current?.click()}
         disabled={creating}
       >
-        Upload Wireframe
+        upload wireframe image
       </button>
       <p className="text-xs text-neutral-500">
         PNG, JPEG, or WebP — max {MAX_FILE_SIZE_MB}MB
