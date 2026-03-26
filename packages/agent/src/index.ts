@@ -4,9 +4,9 @@ import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { generateFromWireframe, iterateOnProject, type AgentEvent } from "./agent";
-import { uploadBuildToR2 } from "./upload";
-import { saveProjectToR2, restoreProjectFromR2 } from "./project-store";
+import { generateFromWireframe, iterateOnProject, type AgentEvent } from "./agent.js";
+import { uploadBuildToR2 } from "./upload.js";
+import { saveProjectToR2, restoreProjectFromR2 } from "./project-store.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
