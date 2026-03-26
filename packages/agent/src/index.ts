@@ -121,7 +121,7 @@ function parseBody(req: http.IncomingMessage, maxBytes: number): Promise<string>
 
 const server = http.createServer(async (req, res) => {
   // CORS headers — restrict to local frontend only
-  const allowedOrigins = ["http://localhost:5173", "http://localhost:5174"];
+  const allowedOrigins = ["http://localhost:5173", "http://localhost:5174", "http://localhost:8788"];
   const origin = req.headers.origin || "";
   if (allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
