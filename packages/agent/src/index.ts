@@ -88,17 +88,15 @@ async function streamAgentEvents(
   }
 }
 
-const MAX_BODY_SIZE = 10 * 1024 * 1024; // 10MB max request body
-
-function parseBody(req: http.IncomingMessage): Promise<string> {
+function parseBody(req: http.IncomingMessage, maxBytes: number): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = "";
     let size = 0;
     req.on("data", (chunk: Buffer) => {
       size += chunk.length;
-      if (size > MAX_BODY_SIZE) {
+      if (size > maxBytes) {
         req.destroy();
-        reject(new Error(`Request body exceeds ${MAX_BODY_SIZE / 1024 / 1024}MB limit`));
+        reject(new Error(`Request body exceeds ${Math.round(maxBytes / 1024)}KB limit`));
         return;
       }
       data += chunk.toString();
@@ -125,9 +123,11 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
-    const body = await parseBody(req);
+    const isGenerate = req.method === "POST" && req.url === "/generate";
+    const maxBody = isGenerate ? 8 * 1024 * 1024 : 64 * 1024; // 8MB for generate (has image), 64KB for everything else
+    const body = await parseBody(req, maxBody);
 
-    if (req.method === "POST" && req.url === "/generate") {
+    if (isGenerate) {
       const { projectId, buildId, image } = JSON.parse(body);
       console.log(`\n=== GENERATE projectId=${projectId} ===`);
 
