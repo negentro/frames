@@ -52,17 +52,40 @@ function writeSSE(res: http.ServerResponse, event: string, data: unknown) {
   res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
 }
 
+const REQUEST_TIMEOUT_MS = Number(
+  process.env.EIGEN_REQUEST_TIMEOUT_MS || "300000", // 5 minutes default
+);
+
 async function streamAgentEvents(
   res: http.ServerResponse,
   events: AsyncGenerator<AgentEvent>,
 ) {
-  for await (const event of events) {
-    const timestamp = new Date().toISOString().slice(11, 19);
-    const preview = event.message || event.error || "";
-    console.log(`[${timestamp}] ${event.type}: ${preview}`);
-    writeSSE(res, event.type, event);
+  let timedOut = false;
+
+  const timeout = setTimeout(() => {
+    timedOut = true;
+    console.log(`[timeout] Request exceeded ${REQUEST_TIMEOUT_MS}ms limit`);
+    writeSSE(res, "error", {
+      type: "error",
+      error: `Request timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s`,
+    });
+    res.end();
+  }, REQUEST_TIMEOUT_MS);
+
+  try {
+    for await (const event of events) {
+      if (timedOut) break;
+      const timestamp = new Date().toISOString().slice(11, 19);
+      const preview = event.message || event.error || "";
+      console.log(`[${timestamp}] ${event.type}: ${preview}`);
+      writeSSE(res, event.type, event);
+    }
+  } finally {
+    clearTimeout(timeout);
+    if (!timedOut) {
+      res.end();
+    }
   }
-  res.end();
 }
 
 function parseBody(req: http.IncomingMessage): Promise<string> {
