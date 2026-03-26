@@ -136,7 +136,7 @@ export function ProjectPage() {
     setInput("");
     addMessage("user", instruction);
     iterate(id, instruction);
-  }, [input, id, status.phase, iterate, addMessage]);
+  }, [input, id, status.phase, iterate, addMessage, undoing]);
 
   const canUndo =
     !undoing &&
