@@ -178,7 +178,7 @@ export function ProjectPage() {
     <div className="flex h-screen">
       {/* Preview Panel */}
       <div className="flex flex-1 flex-col">
-        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
+        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-4">
           <button
             className="text-neutral-400 hover:text-white"
             onClick={() => navigate("/")}
@@ -206,11 +206,11 @@ export function ProjectPage() {
       {/* Chat Panel */}
       <div className="flex w-96 flex-col border-l border-neutral-800">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-neutral-800 px-4 py-3">
-          <div>
-            <h2 className="text-sm font-medium font-mono">{id}</h2>
-            <span className="text-xs text-neutral-500">
-              Created: {new Date(project.created_at).toLocaleString()}
+        <div className="flex items-center justify-between border-b border-neutral-800 px-3 py-2">
+          <div className="min-w-0">
+            <h2 className="text-xs font-medium font-mono truncate">{id}</h2>
+            <span className="text-[10px] text-neutral-500">
+              {new Date(project.created_at).toLocaleString()}
             </span>
           </div>
         </div>
