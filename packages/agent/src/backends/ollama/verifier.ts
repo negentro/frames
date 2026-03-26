@@ -31,7 +31,7 @@ Rules:
 - Use relative paths (e.g. "src/App.tsx"), not absolute paths.
 - Make minimal changes.`;
 
-const MAX_FIX_TURNS = 5;
+const MAX_FIX_TURNS = 10;
 
 export interface VerifyResult {
   success: boolean;
