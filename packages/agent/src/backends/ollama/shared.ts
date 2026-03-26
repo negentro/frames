@@ -168,9 +168,11 @@ export function stripThinkTags(text: string): string {
   return text.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 }
 
-// Strip markdown code fences from model output
+// Strip markdown code fences and leaked XML tags from model output
 export function stripCodeFences(text: string): string {
-  const trimmed = stripThinkTags(text).trim();
+  let trimmed = stripThinkTags(text).trim();
+  // Strip leaked <file_content> tags (from prompt injection mitigation)
+  trimmed = trimmed.replace(/^<file_content[^>]*>\n?/, "").replace(/\n?<\/file_content>$/, "").trim();
   const match = trimmed.match(/^```\w*\n?([\s\S]*?)```$/);
   if (match) return match[1].trim();
   return trimmed;
