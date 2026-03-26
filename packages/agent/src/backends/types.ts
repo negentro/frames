@@ -6,7 +6,6 @@ export interface BackendConfig {
   systemPrompt: string;
   model: string;
   maxTurns: number;
-  maxBudgetUsd?: number;
   isIteration: boolean;
 }
 

@@ -59,20 +59,12 @@ npm run dev
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `MODEL_PROVIDER` | — | Required: `claude` or `ollama` |
-| `EIGEN_MODEL` | `claude-sonnet-4-6` | Model for generation |
-| `EIGEN_ITERATION_MODEL` | `claude-haiku-4-5-20251001` | Cheaper model for iterations (Claude only) |
+| `EIGEN_MODEL` | `qwen2.5-coder:32b` | Coding model |
 | `EIGEN_MAX_TURNS` | `15` | Max agent turns per request |
-| `EIGEN_MAX_BUDGET_PER_QUERY_USD` | `1.00` | Max spend per generation (Claude only) |
-| `EIGEN_ITERATION_BUDGET_USD` | `0.25` | Max spend per iteration (Claude only) |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
 | `OLLAMA_VISION_MODEL` | `qwen2.5vl` | Vision model for wireframe analysis |
 | `EIGEN_REQUEST_TIMEOUT_MS` | `600000` | Max wall-clock time per request (10 min) |
 | `EIGEN_INTERNAL_API_KEY` | `eigen-local-dev-key` | Shared secret for agent→API auth |
-
-### Claude Backend
-
-Set `MODEL_PROVIDER=claude` in the agent `.env`. The Claude backend uses the Claude Agent SDK which authenticates through your Claude Code subscription. For vision (wireframe analysis), set `ANTHROPIC_VISION_API_KEY` with an API key from console.anthropic.com.
 
 ## Service Architecture
 
@@ -178,13 +170,9 @@ Edit matching has three fallback levels:
 2. Quote-swapped match (single ↔ double quotes)
 3. Whitespace-normalized match (regex)
 
-### Backend Providers
+### LLM Backend
 
-The system supports two LLM backends via the `BackendConfig` interface:
-
-**Ollama** — Orchestrator + subagent architecture with local models. Vision handled by the orchestrator's DescribeImage tool.
-
-**Claude** — Uses the Claude Agent SDK's `query()` for a single agentic loop. Sonnet for generation, Haiku for iterations. Vision via the Anthropic SDK with `max_tokens` control.
+Uses Ollama for local model inference. The orchestrator + subagent architecture runs on `qwen2.5-coder:32b` for code generation and `qwen2.5vl` for wireframe vision analysis.
 
 ## Security
 
