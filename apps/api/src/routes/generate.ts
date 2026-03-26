@@ -1,11 +1,17 @@
 import { Hono } from "hono";
 import type { App } from "../types";
+import { validate } from "../validate";
 
 const generate = new Hono<App>();
 
 // Create project and build records, return IDs for the frontend to stream from agent directly
 generate.post("/", async (c) => {
   const body = await c.req.json<{ name: string }>();
+  const err = validate(body, [
+    { field: "name", type: "string", required: true, maxLength: 200 },
+  ]);
+  if (err) return c.json({ error: err }, 400);
+
   const projectId = crypto.randomUUID();
   const buildId = crypto.randomUUID();
 
@@ -59,6 +65,10 @@ generate.post("/:id/complete", async (c) => {
       cost_usd: number;
     };
   }>();
+  const err = validate(body, [
+    { field: "buildId", type: "string", required: true, maxLength: 100 },
+  ]);
+  if (err) return c.json({ error: err }, 400);
 
   const r2Prefix = `projects/${projectId}/builds/${body.buildId}/`;
 
@@ -92,6 +102,10 @@ generate.post("/:id/complete", async (c) => {
 generate.post("/:id/error", async (c) => {
   const { id: projectId } = c.req.param();
   const body = await c.req.json<{ buildId: string }>();
+  const err = validate(body, [
+    { field: "buildId", type: "string", required: true, maxLength: 100 },
+  ]);
+  if (err) return c.json({ error: err }, 400);
 
   await c.env.DB.batch([
     c.env.DB.prepare(

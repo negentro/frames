@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { App, Project } from "../types";
+import { validate } from "../validate";
 
 const projects = new Hono<App>();
 
@@ -14,6 +15,11 @@ projects.get("/", async (c) => {
 // Create a new project
 projects.post("/", async (c) => {
   const body = await c.req.json<{ name: string }>();
+  const err = validate(body, [
+    { field: "name", type: "string", required: true, maxLength: 200 },
+  ]);
+  if (err) return c.json({ error: err }, 400);
+
   const id = crypto.randomUUID();
   await c.env.DB.prepare(
     "INSERT INTO projects (id, name) VALUES (?, ?)"
@@ -68,6 +74,11 @@ projects.get("/:id", async (c) => {
 projects.post("/:id/messages", async (c) => {
   const { id } = c.req.param();
   const body = await c.req.json<{ role: string; content: string }>();
+  const err = validate(body, [
+    { field: "role", type: "string", required: true, maxLength: 20 },
+    { field: "content", type: "string", required: true, maxLength: 5000 },
+  ]);
+  if (err) return c.json({ error: err }, 400);
 
   await c.env.DB.prepare(
     "INSERT INTO messages (project_id, role, content) VALUES (?, ?, ?)"
