@@ -38,4 +38,4 @@ RUN mkdir -p .wrangler
 
 EXPOSE 8788
 
-CMD ["npx", "wrangler", "dev", "--port", "8788", "--ip", "0.0.0.0", "--assets", "./public"]
+CMD sh -c "npx wrangler d1 execute eigen-db --local --file=schema.sql && npx wrangler dev --port 8788 --ip 0.0.0.0 --assets ./public"
