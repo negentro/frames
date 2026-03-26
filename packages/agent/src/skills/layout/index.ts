@@ -21,6 +21,7 @@ Put your reasoning in a "reasoning" field, then your edits:
 RULES:
 - The "old" value MUST be an exact substring from the file including quote style.
 - Only change layout classes. Do not touch colors, text, or logic.
+- When adding a property, APPEND the class. Do not remove existing classes unless explicitly asked.
 - Minimal changes only.`,
 
   examples: `Example:
