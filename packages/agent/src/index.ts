@@ -5,6 +5,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { generateFromWireframe, iterateOnProject, type AgentEvent } from "./agent";
+import { uploadBuildToR2 } from "./upload";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
@@ -59,8 +60,12 @@ const REQUEST_TIMEOUT_MS = Number(
 async function streamAgentEvents(
   res: http.ServerResponse,
   events: AsyncGenerator<AgentEvent>,
+  projectId: string,
+  buildId: string,
+  projectDir: string,
 ) {
   let timedOut = false;
+  let hadError = false;
 
   const timeout = setTimeout(() => {
     timedOut = true;
@@ -79,6 +84,12 @@ async function streamAgentEvents(
       const preview = event.message || event.error || "";
       console.log(`[${timestamp}] ${event.type}: ${preview}`);
       writeSSE(res, event.type, event);
+      if (event.type === "error") hadError = true;
+    }
+
+    // Upload build artifacts to R2 after successful completion
+    if (!timedOut && !hadError) {
+      await uploadBuildToR2(projectId, buildId, projectDir);
     }
   } finally {
     clearTimeout(timeout);
@@ -145,7 +156,7 @@ const server = http.createServer(async (req, res) => {
       writeSSE(res, "status", { type: "status", message: "Dependencies installed" });
 
       const events = generateFromWireframe(projectDir, image);
-      await streamAgentEvents(res, events);
+      await streamAgentEvents(res, events, projectId, buildId, projectDir);
       return;
     }
 
@@ -169,7 +180,7 @@ const server = http.createServer(async (req, res) => {
       writeSSE(res, "status", { type: "status", message: "Starting iteration" });
 
       const events = iterateOnProject(projectDir, instruction, annotation);
-      await streamAgentEvents(res, events);
+      await streamAgentEvents(res, events, projectId, buildId, projectDir);
       return;
     }
 

@@ -2,6 +2,7 @@ export type Bindings = {
   ASSETS: R2Bucket;
   DB: D1Database;
   AGENT_URL: string;
+  INTERNAL_API_KEY: string;
 };
 
 export type App = { Bindings: Bindings };

@@ -4,6 +4,7 @@ import type { App } from "./types";
 import { projects } from "./routes/projects";
 import { generate } from "./routes/generate";
 import { preview } from "./routes/preview";
+import { builds } from "./routes/builds";
 
 const app = new Hono<App>();
 
@@ -23,5 +24,6 @@ app.get("/api/health", (c) => {
 app.route("/api/projects", projects);
 app.route("/api/generate", generate);
 app.route("/api/preview", preview);
+app.route("/api/builds", builds);
 
 export default app;

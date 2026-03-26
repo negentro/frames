@@ -19,3 +19,4 @@ database_id = "local"
 
 [vars]
 AGENT_URL = "http://localhost:8787"
+INTERNAL_API_KEY = "eigen-local-dev-key"

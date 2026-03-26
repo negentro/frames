@@ -176,7 +176,6 @@ export function streamFromAgent(
 }
 
 export function getPreviewUrl(projectId: string, buildId: string): string {
-  // Serve directly from agent server — the API server proxy has issues in wrangler dev
-  // buildId as query param forces iframe reload on new builds
-  return `${AGENT_BASE}/builds/${projectId}/?b=${buildId}`;
+  // Serve from API server (R2 storage) via preview proxy
+  return `${API_BASE}/api/preview/${projectId}/builds/${buildId}/`;
 }
