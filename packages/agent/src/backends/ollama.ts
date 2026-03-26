@@ -146,8 +146,9 @@ export const ollamaBackend: AgentBackend = async function* (
   }
 
   // --- Git commit ---
+  bashTool({ command: "git add -A" }, config.projectDir);
   bashTool(
-    { command: 'git add -A && git commit -m "Update project"' },
+    { command: 'git commit -m "Update project"' },
     config.projectDir,
   );
 

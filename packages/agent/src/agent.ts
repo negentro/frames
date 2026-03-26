@@ -16,7 +16,7 @@ CRITICAL RULES:
 - Only create files under src/.
 - Do NOT run git push, git remote, or any network commands.
 - Do NOT use find or ls to explore. Just write your files directly.
-- Write ALL files first, then run "npm run build", then "git add -A && git commit -m 'description'".
+- Write ALL files first, then run "npm run build", then "git add -A", then "git commit -m 'description'". Each as a separate command.
 
 Available libraries: react 19, react-dom 19, react-router-dom v7, tailwindcss v4, lucide-react, clsx.
 

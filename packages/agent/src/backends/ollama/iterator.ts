@@ -18,7 +18,7 @@ CRITICAL RULES:
 - Tailwind v4: use utility classes. Do NOT import tailwindcss.
 - React 19: uses createRoot (already set up in main.tsx). Do NOT touch main.tsx.
 - After making changes, run "npm run build" to verify. If it fails, fix the errors.
-- When done, run "git add -A && git commit -m 'description of change'"
+- When done, run "git add -A" then "git commit -m 'description of change'" as separate commands
 - Do NOT run git push or any network commands.`;
 
 export async function* runIterator(

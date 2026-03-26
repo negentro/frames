@@ -1,0 +1,42 @@
+{
+  "commands": {
+    "npm": {
+      "allowed_subcommands": ["run", "install", "ci", "ls", "list", "fund"]
+    },
+    "npx": {},
+    "node": {},
+    "tsc": {},
+    "git": {
+      "allowed_subcommands": ["add", "commit", "status", "log", "diff", "init", "rev-parse", "show"]
+    },
+    "ls": {},
+    "find": {},
+    "cat": {},
+    "head": {},
+    "tail": {},
+    "mkdir": {},
+    "cp": {},
+    "mv": {},
+    "rm": {},
+    "echo": {},
+    "grep": {},
+    "sort": {},
+    "wc": {},
+    "diff": {},
+    "pwd": {},
+    "dirname": {},
+    "basename": {},
+    "test": {},
+    "[": {}
+  },
+  "security": {
+    "allow_subshells": false,
+    "allow_process_substitution": false,
+    "strip_env": [
+      "ANTHROPIC_API_KEY",
+      "ANTHROPIC_VISION_API_KEY"
+    ],
+    "max_output_chars": 2000,
+    "timeout_ms": 60000
+  }
+}
