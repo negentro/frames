@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
 import { generateFromWireframe, iterateOnProject, type AgentEvent } from "./agent";
 import { uploadBuildToR2 } from "./upload";
+import { saveProjectToR2, restoreProjectFromR2 } from "./project-store";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 8787);
@@ -87,9 +88,10 @@ async function streamAgentEvents(
       if (event.type === "error") hadError = true;
     }
 
-    // Upload build artifacts to R2 after successful completion
+    // Upload build artifacts + project source to R2 after successful completion
     if (!timedOut && !hadError) {
       await uploadBuildToR2(projectId, buildId, projectDir);
+      await saveProjectToR2(projectId, projectDir);
     }
   } finally {
     clearTimeout(timeout);
@@ -171,10 +173,14 @@ const server = http.createServer(async (req, res) => {
       });
 
       const projectDir = join(PROJECTS_DIR, projectId);
-      if (!existsSync(projectDir)) {
-        writeSSE(res, "error", { type: "error", error: "Project not found" });
-        res.end();
-        return;
+      if (!existsSync(join(projectDir, "src"))) {
+        writeSSE(res, "status", { type: "status", message: "Restoring project" });
+        const restored = await restoreProjectFromR2(projectId, projectDir);
+        if (!restored) {
+          writeSSE(res, "error", { type: "error", error: "Project not found" });
+          res.end();
+          return;
+        }
       }
 
       writeSSE(res, "status", { type: "status", message: "Starting iteration" });
@@ -190,10 +196,13 @@ const server = http.createServer(async (req, res) => {
       console.log(`\n=== UNDO projectId=${projectId} ===`);
 
       const projectDir = join(PROJECTS_DIR, projectId);
-      if (!existsSync(projectDir)) {
-        res.writeHead(404, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "Project not found" }));
-        return;
+      if (!existsSync(join(projectDir, "src"))) {
+        const restored = await restoreProjectFromR2(projectId, projectDir);
+        if (!restored) {
+          res.writeHead(404, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Project not found" }));
+          return;
+        }
       }
 
       try {
@@ -216,8 +225,9 @@ const server = http.createServer(async (req, res) => {
         // Rebuild
         execSync("npm run build", { cwd: projectDir, stdio: "pipe", timeout: 60000 });
 
-        // Upload new build to R2
+        // Upload new build + save reverted source to R2
         await uploadBuildToR2(projectId, buildId, projectDir);
+        await saveProjectToR2(projectId, projectDir);
 
         res.writeHead(200, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ ok: true }));

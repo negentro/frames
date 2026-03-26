@@ -17,8 +17,8 @@ RUN npm run build
 # Runtime stage
 FROM node:20-alpine
 
-# Git is needed for project commits/reverts
-RUN apk add --no-cache git
+# Git for commits/reverts, zip/unzip for R2 project storage
+RUN apk add --no-cache git zip unzip
 
 # Create non-root user
 RUN addgroup -S eigen && adduser -S eigen -G eigen
@@ -36,9 +36,8 @@ COPY --from=builder /app/packages/agent/dist ./dist
 COPY packages/agent/bash-permissions.json ./
 COPY packages/agent/src/templates ./dist/templates
 
-# Projects directory — mount as volume for persistence
-RUN mkdir -p /data/projects && chown eigen:eigen /data/projects
-VOLUME /data/projects
+# Ephemeral projects directory — state is persisted to R2
+RUN mkdir -p /tmp/eigen-projects && chown eigen:eigen /tmp/eigen-projects
 
 # Switch to non-root user
 USER eigen
@@ -48,7 +47,7 @@ RUN git config --global user.email "eigen@local" && \
     git config --global user.name "Eigen Agent"
 
 ENV PORT=8787
-ENV PROJECTS_DIR=/data/projects
+ENV PROJECTS_DIR=/tmp/eigen-projects
 ENV NODE_ENV=production
 
 EXPOSE 8787

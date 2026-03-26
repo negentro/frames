@@ -55,4 +55,54 @@ builds.post("/:projectId/:buildId/upload", async (c) => {
   return c.json({ ok: true, uploaded, r2Prefix });
 });
 
+// Upload project source zip to R2 — called by agent server after builds
+builds.post("/:projectId/source/upload", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  const expectedKey = c.env.INTERNAL_API_KEY;
+
+  if (!expectedKey || authHeader !== `Bearer ${expectedKey}`) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const { projectId } = c.req.param();
+  const body = await c.req.json<{ content: string }>();
+
+  if (!body.content || typeof body.content !== "string") {
+    return c.json({ error: "Missing content" }, 400);
+  }
+
+  if (body.content.length > 50 * 1024 * 1024) {
+    return c.json({ error: "Source zip too large (max 50MB)" }, 400);
+  }
+
+  const data = Uint8Array.from(atob(body.content), (c) => c.charCodeAt(0));
+  await c.env.ASSETS.put(`projects/${projectId}/source.zip`, data);
+
+  return c.json({ ok: true });
+});
+
+// Download project source zip from R2 — called by agent server to restore projects
+builds.get("/:projectId/source/download", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  const expectedKey = c.env.INTERNAL_API_KEY;
+
+  if (!expectedKey || authHeader !== `Bearer ${expectedKey}`) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const { projectId } = c.req.param();
+  const object = await c.env.ASSETS.get(`projects/${projectId}/source.zip`);
+
+  if (!object) {
+    return c.json({ error: "Not found" }, 404);
+  }
+
+  const arrayBuffer = await object.arrayBuffer();
+  const base64 = btoa(
+    String.fromCharCode(...new Uint8Array(arrayBuffer)),
+  );
+
+  return c.json({ content: base64 });
+});
+
 export { builds };

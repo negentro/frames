@@ -5,13 +5,8 @@ services:
       dockerfile: packages/agent/Dockerfile
     ports:
       - "8787:8787"
-    volumes:
-      - eigen-projects:/data/projects
     env_file:
       - packages/agent/.env
     environment:
       - PORT=8787
-      - PROJECTS_DIR=/data/projects
-
-volumes:
-  eigen-projects:
+      - PROJECTS_DIR=/tmp/eigen-projects
