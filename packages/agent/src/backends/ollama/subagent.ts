@@ -3,8 +3,11 @@ import { resolve } from "node:path";
 import { chatCompletion, stripCodeFences, stripThinkTags, extractJSON, log } from "./shared.js";
 import type { FilePlan, OrchestratorPlan } from "./orchestrator.js";
 import { getSkill } from "../../skills/index.js";
+import { wrapFileContent, FILE_CONTENT_GUARD } from "../../sanitize.js";
 
 const CREATE_SYSTEM = `You are a code generator. Write the complete content for a single file.
+
+${FILE_CONTENT_GUARD}
 
 Rules:
 - Output ONLY the file content. No markdown fences, no explanation, no preamble.
@@ -51,7 +54,7 @@ async function runCreateSubagent(
   let fileContext = "";
   for (const [path, content] of writtenFiles) {
     if (path !== filePlan.path && path !== "src/main.tsx" && content.length < 3000) {
-      fileContext += `\nContent of ${path}:\n\`\`\`\n${content}\n\`\`\`\n`;
+      fileContext += `\n${wrapFileContent(path, content)}\n`;
     }
   }
 
@@ -109,7 +112,7 @@ async function runModifySubagent(
   let newFilesContext = "";
   for (const [path, content] of writtenFiles) {
     if (path !== filePlan.path && path !== "src/main.tsx" && content.length < 3000) {
-      newFilesContext += `\nNewly created ${path}:\n\`\`\`\n${content}\n\`\`\`\n`;
+      newFilesContext += `\n${wrapFileContent(path, content)}\n`;
     }
   }
 
@@ -122,13 +125,13 @@ async function runModifySubagent(
   const skill = getSkill(filePlan.skill || "general");
   log(`Using skill: ${skill.name}`);
 
-  const userPrompt = `Plan context:
+  const userPrompt = `${FILE_CONTENT_GUARD}
+
+Plan context:
 ${planContext}
 
-Current file ${filePlan.path}:
-\`\`\`
-${currentContent}
-\`\`\`
+Current file to edit:
+${wrapFileContent(filePlan.path, currentContent)}
 ${newFilesContext}
 Instruction: ${filePlan.description}
 

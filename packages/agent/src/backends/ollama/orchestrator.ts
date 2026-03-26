@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { AgentEvent } from "../../agent.js";
 import { executeTool } from "../../tools/index.js";
+import { wrapFileContent, FILE_CONTENT_GUARD } from "../../sanitize.js";
 import {
   chatCompletion,
   describeImage,
@@ -146,6 +147,8 @@ Each file MUST have a "skill" field. Available skills:
 
 Choose the MOST SPECIFIC skill. "Change header color to red" → styling. "Make hero fill viewport" → layout. "Add a carousel" → component + integration.
 
+${FILE_CONTENT_GUARD}
+
 Respond with ONLY a JSON object matching this schema (no markdown, no explanation):
 ${PLAN_SCHEMA}`;
 }
@@ -180,7 +183,7 @@ export async function runOrchestrator(
           const { readFile } = await import("node:fs/promises");
           const content = await readFile(join(projectDir, file), "utf-8");
           if (content.length < 2000) {
-            projectContext += `\n${file}:\n\`\`\`\n${content}\n\`\`\`\n`;
+            projectContext += `\n${wrapFileContent(file, content)}\n`;
           }
         } catch { /* skip */ }
       }
