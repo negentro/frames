@@ -17,7 +17,7 @@ import App from "./App";
 createRoot(document.getElementById("root")!).render(<App />);
 `;
 
-const MAX_ATTEMPTS = 3;
+const MAX_ATTEMPTS = 2;
 
 export const ollamaBackend: AgentBackend = async function* (
   config: BackendConfig,
@@ -58,7 +58,25 @@ export const ollamaBackend: AgentBackend = async function* (
     log("Wrote hardcoded src/main.tsx");
   }
 
-  // --- Main loop: plan → execute → verify → review → retry if needed ---
+  // --- Pre-describe images once (cached for retry loop) ---
+  let textPrompt = config.prompt;
+  const { images: promptImages } = extractImages(config.prompt);
+  if (promptImages.length > 0) {
+    yield { type: "status", message: "Analyzing wireframe" };
+    const { describeImage, VISION_MODEL: vm } = await import("./ollama/shared.js");
+    const descriptions: string[] = [];
+    for (const img of promptImages) {
+      const desc = await describeImage(img, vm);
+      descriptions.push(desc);
+    }
+    // Replace image markdown with text descriptions
+    textPrompt = extractImages(config.prompt).text +
+      "\n\n" +
+      descriptions.map((d, i) => `[Wireframe ${i + 1} description]:\n${d}`).join("\n\n");
+    log(`Pre-described ${promptImages.length} image(s), text prompt ${textPrompt.length} chars`);
+  }
+
+  // --- Main loop: plan → execute → verify → retry if needed ---
   let feedback = "";
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
@@ -73,8 +91,8 @@ export const ollamaBackend: AgentBackend = async function* (
     let plan: OrchestratorPlan;
     try {
       const promptWithFeedback = feedback
-        ? `${config.prompt}\n\nPREVIOUS ATTEMPT FEEDBACK (fix these issues):\n${feedback}`
-        : config.prompt;
+        ? `${textPrompt}\n\nPREVIOUS ATTEMPT FEEDBACK (fix these issues):\n${feedback}`
+        : textPrompt;
 
       plan = await runOrchestrator(
         config.model,

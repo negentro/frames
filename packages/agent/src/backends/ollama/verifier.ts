@@ -27,6 +27,8 @@ Call tools using this JSON format in your response:
 Rules:
 - React 19: do NOT import React. Use createRoot from "react-dom/client".
 - Tailwind v4: do NOT import tailwindcss. Use utility classes only.
+- Do NOT modify tsconfig.json, package.json, vite.config.ts, or index.html. Only fix files under src/.
+- Use relative paths (e.g. "src/App.tsx"), not absolute paths.
 - Make minimal changes.`;
 
 const MAX_FIX_TURNS = 5;
