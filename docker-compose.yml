@@ -20,8 +20,25 @@ services:
       - OLLAMA_HOST=ollama:11434
     entrypoint: >
       sh -c "
-        echo 'Ensuring models are available...' &&
-        ollama pull ${EIGEN_MODEL:-qwen2.5-coder:32b} &&
+        MEM_KB=$$(grep MemTotal /proc/meminfo | awk '{print $$2}')
+        MEM_GB=$$((MEM_KB / 1024 / 1024))
+        echo \"Available memory: $${MEM_GB}GB\"
+        if [ $$MEM_GB -lt 20 ]; then
+          echo ''
+          echo '❌ Insufficient memory for local model inference.'
+          echo ''
+          echo '   frames runs AI models locally via Ollama, which requires'
+          echo '   enough memory to load the model weights into RAM.'
+          echo ''
+          echo '   Minimum: 25GB allocated to Docker'
+          echo '   Current: '$${MEM_GB}'GB'
+          echo ''
+          echo '   To fix: Docker Desktop → Settings → Resources → Memory → 25GB'
+          echo ''
+          exit 1
+        fi
+        echo 'Pulling models...' &&
+        ollama pull qwen2.5-coder:32b &&
         ollama pull qwen2.5vl &&
         echo 'Models ready.'
       "
