@@ -17,7 +17,7 @@ import App from "./App";
 createRoot(document.getElementById("root")!).render(<App />);
 `;
 
-const MAX_ATTEMPTS = 2;
+const MAX_ATTEMPTS = 3;
 
 export const ollamaBackend: AgentBackend = async function* (
   config: BackendConfig,
@@ -74,10 +74,21 @@ export const ollamaBackend: AgentBackend = async function* (
       "\n\n" +
       descriptions.map((d, i) => `[Wireframe ${i + 1} description]:\n${d}`).join("\n\n");
     log(`Pre-described ${promptImages.length} image(s), text prompt ${textPrompt.length} chars`);
+
+    // Fail fast if vision model returned unusable descriptions
+    const badDescriptions = descriptions.filter(
+      (d) => d === "Unable to describe image" || d.length < 20,
+    );
+    if (badDescriptions.length > 0) {
+      log(`Vision failed: ${badDescriptions.length}/${descriptions.length} descriptions unusable`);
+      yield { type: "error", error: "Vision model failed to analyze the wireframe. Please try again or use a text description instead." };
+      return;
+    }
   }
 
   // --- Main loop: plan → execute → verify → retry if needed ---
   let feedback = "";
+  let buildSucceeded = false;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     log(`=== Attempt ${attempt}/${MAX_ATTEMPTS} ===`);
@@ -110,6 +121,13 @@ export const ollamaBackend: AgentBackend = async function* (
       yield ev;
     }
 
+    // On retry after build failure, force all files to "create" (rewrite from scratch)
+    // — modifying broken files just layers errors on errors
+    if (attempt > 1 && feedback.includes("Build failed")) {
+      plan.files = plan.files.map((f) => ({ ...f, action: "create" as const }));
+      log("Retry: forcing all files to action=create (rewrite)");
+    }
+
     log(`Plan: ${plan.summary} (${plan.files.length} files)`);
 
     // --- Phase 2: Subagents ---
@@ -120,6 +138,7 @@ export const ollamaBackend: AgentBackend = async function* (
     const writtenFiles = new Map<string, string>();
     writtenFiles.set("src/main.tsx", MAIN_TSX);
 
+    let subagentFailures = 0;
     for (const filePlan of plan.files) {
       try {
         const result = await runSubagent(
@@ -136,9 +155,22 @@ export const ollamaBackend: AgentBackend = async function* (
         );
         writtenFiles.set(result.path, result.content);
       } catch (err) {
+        subagentFailures++;
         const msg = err instanceof Error ? err.message : String(err);
         log(`Subagent error for ${filePlan.path}: ${msg}`);
       }
+    }
+
+    // If all subagents failed, skip build and retry from scratch
+    if (subagentFailures === plan.files.length && plan.files.length > 0) {
+      log(`All ${subagentFailures} subagents failed, skipping build`);
+      feedback = "All code generation subagents failed — no files were written. Simplify the plan and use fewer files.";
+      if (attempt < MAX_ATTEMPTS) {
+        yield { type: "status", message: `Code generation failed, retrying (attempt ${attempt + 1})` };
+        continue;
+      }
+      yield { type: "status", message: "Code generation failed after all attempts" };
+      break;
     }
 
     // --- Phase 3: Verify build ---
@@ -158,12 +190,37 @@ export const ollamaBackend: AgentBackend = async function* (
       break;
     }
 
-    // Build passed — accept the result
-    log("Build passed, accepting result");
+    buildSucceeded = true;
+
+    // Build passed — run reviewer
+    log("Build passed, running reviewer");
+    yield { type: "status", message: "Reviewing implementation" };
+
+    const changedFiles = plan.files.map((f) => f.path);
+    const reviewResult = await runReviewer(
+      config.model,
+      config.projectDir,
+      textPrompt,
+      changedFiles,
+    );
+
+    if (reviewResult.satisfied) {
+      log("Reviewer satisfied, accepting result");
+      break;
+    }
+
+    log(`Reviewer not satisfied: ${reviewResult.feedback}`);
+    feedback = `Build succeeded but review failed: ${reviewResult.feedback}`;
+    if (attempt < MAX_ATTEMPTS) {
+      buildSucceeded = false; // reset — need to rebuild on next attempt
+      yield { type: "status", message: `Review failed, retrying (attempt ${attempt + 1})` };
+      continue;
+    }
+    yield { type: "status", message: "Review failed after all attempts, accepting result" };
     break;
   }
 
-  // --- Git commit ---
+  // --- Git commit (save partial work even on failure) ---
   bashTool({ command: "git add -A" }, config.projectDir);
   bashTool(
     { command: 'git commit -m "Update project"' },
@@ -176,6 +233,12 @@ export const ollamaBackend: AgentBackend = async function* (
     output_tokens: 0,
     cost_usd: 0,
   };
+
+  if (!buildSucceeded) {
+    yield { type: "error", error: "Agent failed to produce a working build after all attempts" };
+    log("Ollama backend failed — no successful build");
+    return;
+  }
 
   yield { type: "complete", message: "Done" };
   log("Ollama backend complete");

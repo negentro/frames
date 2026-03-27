@@ -52,6 +52,8 @@ export function extractImages(prompt: string): {
   return { text: text.trim(), images };
 }
 
+const MAX_EMPTY_RETRIES = 2;
+
 export async function chatCompletion(
   model: string,
   messages: ChatMessage[],
@@ -62,42 +64,53 @@ export async function chatCompletion(
     body.tools = tools;
   }
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min timeout
+  for (let attempt = 1; attempt <= MAX_EMPTY_RETRIES; attempt++) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 300_000); // 5 min timeout
 
-  const res = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-    signal: controller.signal,
-  });
+    const res = await fetch(`${OLLAMA_BASE_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
 
-  clearTimeout(timeout);
+    clearTimeout(timeout);
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Ollama API error ${res.status}: ${text}`);
-  }
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Ollama API error ${res.status}: ${text}`);
+    }
 
-  const json = await res.json() as unknown as Record<string, unknown>;
-  const choices = (json as unknown as ChatResponse).choices;
+    const json = await res.json() as unknown as Record<string, unknown>;
+    const choices = (json as unknown as ChatResponse).choices;
 
-  // qwen3 puts thinking in "reasoning" field and may leave "content" empty
-  if (choices?.[0]?.message) {
-    const msg = choices[0].message as Record<string, unknown>;
-    const content = msg.content as string || "";
-    const reasoning = msg.reasoning as string || "";
+    // qwen3 puts thinking in "reasoning" field and may leave "content" empty
+    const msg = choices?.[0]?.message as Record<string, unknown> | undefined;
+    const content = (msg?.content as string) || "";
+    const reasoning = (msg?.reasoning as string) || "";
+    const hasToolCalls = msg?.tool_calls && (msg.tool_calls as unknown[]).length > 0;
 
-    if (!content && reasoning) {
-      log(`LLM: content empty, reasoning=${reasoning.length} chars (qwen3 thinking mode?)`);
+    if (!content && !hasToolCalls) {
+      if (reasoning) {
+        log(`LLM: content empty, reasoning=${reasoning.length} chars (qwen3 thinking mode?) — attempt ${attempt}/${MAX_EMPTY_RETRIES}`);
+      } else {
+        log(`LLM: empty response — attempt ${attempt}/${MAX_EMPTY_RETRIES}`);
+      }
+      if (attempt < MAX_EMPTY_RETRIES) {
+        log("Retrying due to empty response...");
+        continue;
+      }
+      log("LLM returned empty after all retries");
     } else if (content) {
       log(`LLM: content=${content.length} chars`);
-    } else {
-      log(`LLM: empty response`);
     }
+
+    return json as unknown as ChatResponse;
   }
 
-  return json as unknown as ChatResponse;
+  // Should not reach here, but satisfy TypeScript
+  throw new Error("chatCompletion: exhausted retries with no response");
 }
 
 export async function describeImage(

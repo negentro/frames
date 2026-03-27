@@ -111,7 +111,7 @@ export async function restoreProjectFromR2(
     // Reinstall dependencies if node_modules is missing
     if (!existsSync(join(projectDir, "node_modules"))) {
       console.log(`[project-store] Installing dependencies...`);
-      execSync("npm install", {
+      execSync("npm install --include=dev", {
         cwd: projectDir,
         stdio: "pipe",
         timeout: 120000,

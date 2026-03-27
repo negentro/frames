@@ -81,6 +81,9 @@ Write the complete content for ${filePlan.path}. Only output the file content, n
   const raw = response.choices[0]?.message?.content || "";
   const content = stripCodeFences(raw);
   log(`Create subagent produced ${content.length} chars for ${filePlan.path}`);
+
+  validateSubagentOutput(content, filePlan.path);
+
   return { path: filePlan.path, content };
 }
 
@@ -105,7 +108,9 @@ async function runModifySubagent(
       { role: "user", content: `File: ${filePlan.path}\nDescription: ${filePlan.description}\n\nWrite the complete content.` },
     ]);
     const raw = response.choices[0]?.message?.content || "";
-    return { path: filePlan.path, content: stripCodeFences(raw) };
+    const content = stripCodeFences(raw);
+    validateSubagentOutput(content, filePlan.path);
+    return { path: filePlan.path, content };
   }
 
   // Build context about newly created files in this plan
@@ -222,4 +227,17 @@ Output your edits for this file now.`;
   // Fallback: keep file unchanged
   log(`Modify subagent: keeping ${filePlan.path} unchanged (no valid edits)`);
   return { path: filePlan.path, content: currentContent };
+}
+
+/** Throw if generated content is empty or clearly not valid code. */
+function validateSubagentOutput(content: string, path: string): void {
+  if (!content || content.length < 10) {
+    throw new Error(`Subagent produced empty/tiny output for ${path} (${content.length} chars)`);
+  }
+  // .tsx files must have at least an export or function declaration
+  if (path.endsWith(".tsx") || path.endsWith(".ts")) {
+    if (!content.includes("export") && !content.includes("function") && !content.includes("const")) {
+      throw new Error(`Subagent output for ${path} doesn't look like TypeScript (no export/function/const)`);
+    }
+  }
 }

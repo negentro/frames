@@ -39,8 +39,8 @@ async function ensureProjectDir(projectId: string): Promise<string> {
       stdio: "pipe",
     });
 
-    // Install dependencies
-    execSync("npm install", {
+    // Install dependencies (including devDependencies for build tools)
+    execSync("npm install --include=dev", {
       cwd: projectDir,
       stdio: "pipe",
       timeout: 120000,
@@ -90,7 +90,13 @@ async function streamAgentEvents(
 
     // Upload build artifacts + project source to R2 after successful completion
     if (!timedOut && !hadError) {
-      await uploadBuildToR2(projectId, buildId, projectDir);
+      const uploaded = await uploadBuildToR2(projectId, buildId, projectDir);
+      if (!uploaded) {
+        writeSSE(res, "error", {
+          type: "error",
+          error: "Build completed but upload failed — dist/ may be missing or empty",
+        });
+      }
       await saveProjectToR2(projectId, projectDir);
     }
   } finally {

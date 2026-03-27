@@ -64,6 +64,6 @@ export async function runReviewer(
     log(`Reviewer error: ${err instanceof Error ? err.message : err}`);
   }
 
-  log("Review parse failed, assuming satisfied");
-  return { satisfied: true, feedback: "Review inconclusive" };
+  log("Review parse failed, assuming NOT satisfied to force retry");
+  return { satisfied: false, feedback: "Reviewer failed to produce valid JSON — re-check implementation" };
 }
