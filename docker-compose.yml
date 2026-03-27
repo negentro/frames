@@ -1,49 +1,4 @@
 services:
-  ollama:
-    image: ollama/ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  model-loader:
-    image: ollama/ollama
-    depends_on:
-      ollama:
-        condition: service_healthy
-    environment:
-      - OLLAMA_HOST=ollama:11434
-    entrypoint: >
-      sh -c "
-        MEM_KB=$$(grep MemTotal /proc/meminfo | awk '{print $$2}')
-        MEM_GB=$$((MEM_KB / 1024 / 1024))
-        echo \"Available memory: $${MEM_GB}GB\"
-        if [ $$MEM_GB -lt 20 ]; then
-          echo ''
-          echo '❌ Insufficient memory for local model inference.'
-          echo ''
-          echo '   frames runs AI models locally via Ollama, which requires'
-          echo '   enough memory to load the model weights into RAM.'
-          echo ''
-          echo '   Minimum: 25GB allocated to Docker'
-          echo '   Current: '$${MEM_GB}'GB'
-          echo ''
-          echo '   To fix: Docker Desktop → Settings → Resources → Memory → 25GB'
-          echo ''
-          exit 1
-        fi
-        echo 'Pulling models...' &&
-        ollama pull qwen2.5-coder:32b &&
-        ollama pull qwen2.5vl &&
-        echo 'Models ready.'
-      "
-    restart: "no"
-
   api:
     build:
       context: .
@@ -52,9 +7,6 @@ services:
       - "8788:8788"
     volumes:
       - wrangler-state:/app/.wrangler/state
-    depends_on:
-      ollama:
-        condition: service_healthy
     environment:
       - AGENT_URL=http://agent:8787
       - INTERNAL_API_KEY=eigen-local-dev-key
@@ -65,17 +17,13 @@ services:
       dockerfile: packages/agent/Dockerfile
     ports:
       - "8787:8787"
-    depends_on:
-      ollama:
-        condition: service_healthy
     env_file:
       - packages/agent/.env
     environment:
       - PORT=8787
       - PROJECTS_DIR=/tmp/eigen-projects
       - API_URL=http://api:8788
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
 
 volumes:
   wrangler-state:
-  ollama-models:

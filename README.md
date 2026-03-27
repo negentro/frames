@@ -19,27 +19,47 @@ Claude Code was used as a development tool throughout this project — in part t
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
-- **25GB+ memory allocated to Docker** — frames runs AI models locally via Ollama, which requires enough memory to load model weights into RAM. Set this in Docker Desktop → Settings → Resources → Memory → 25GB.
+- [Ollama](https://ollama.com/) installed on the host (recommended), or 25GB+ memory allocated to Docker for containerized Ollama
 - ~25GB disk space for model downloads (first run only)
 
-### Quick Start
+### Deployment Modes
+
+There are two ways to run frames, depending on whether Ollama runs on the host or inside Docker. The difference matters because Docker Desktop runs a Linux VM — containers cannot access the host GPU (Metal on macOS, CUDA on Linux). Running Ollama natively on the host gives it direct GPU access, which makes inference significantly faster.
+
+#### Hybrid (recommended)
+
+Ollama runs natively on the host with GPU acceleration. The API and agent services run in Docker and connect to Ollama via `host.docker.internal`.
 
 ```bash
+# Start Ollama and pull models
+ollama serve
+ollama pull qwen2.5-coder:32b
+ollama pull qwen2.5vl
+
+# Start the app
 docker compose up
 ```
 
-This starts four services:
+#### Fully Containerized
+
+Everything runs in Docker, including Ollama. No host dependencies beyond Docker itself, but inference runs on CPU only. Requires **25GB+ memory allocated to Docker** (Docker Desktop → Settings → Resources → Memory).
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.ollama.yml up
+```
+
+First run downloads `qwen2.5-coder:32b` (~20GB) and `qwen2.5vl` (~5GB). Subsequent starts use cached models.
+
+### Services
 
 | Service | Port | Description |
 |---------|------|-------------|
-| **ollama** | 11434 | Local LLM server |
-| **model-loader** | — | Pulls required models, then exits |
+| **ollama** | 11434 | Local LLM server (containerized mode only) |
+| **model-loader** | — | Pulls required models, then exits (containerized mode only) |
 | **api** | 8788 | Frontend + API + R2/D1 storage |
 | **agent** | 8787 | Agent server (code generation) |
 
 Open **http://localhost:8788** once all services are healthy.
-
-First run downloads `qwen2.5-coder:32b` (~20GB) and `qwen2.5vl` (~5GB). Subsequent starts use cached models.
 
 ### Local Development (without Docker)
 
