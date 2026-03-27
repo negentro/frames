@@ -1,7 +1,6 @@
 # frames ⧉
 
-[![Watch the video]([https://img.youtube.com/vi/<VIDEO_ID>/hqdefault.jpg]([https://www.loom.com/share/d8fa7cea82f94637aaf5f0096e5bcbb0))](https://www.youtube.com/embed/<VIDEO_ID>](https://www.loom.com/share/d8fa7cea82f94637aaf5f0096e5bcbb0))
-
+https://github.com/user-attachments/assets/6dbc5287-82ad-4b83-9251-54c81d083753
 
 wireframes to webframes
 
