@@ -9,6 +9,7 @@ An agent-based frontend design tool that transforms wireframe images into workin
 ### Prerequisites
 
 - [Docker](https://docs.docker.com/get-docker/) and Docker Compose
+- **25GB+ memory allocated to Docker** — frames runs AI models locally via Ollama, which requires enough memory to load model weights into RAM. Set this in Docker Desktop → Settings → Resources → Memory → 25GB.
 - ~25GB disk space for model downloads (first run only)
 
 ### Quick Start
