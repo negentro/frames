@@ -21,7 +21,7 @@ services:
     entrypoint: >
       sh -c "
         echo 'Ensuring models are available...' &&
-        ollama pull qwen2.5-coder:32b &&
+        ollama pull ${EIGEN_MODEL:-qwen2.5-coder:32b} &&
         ollama pull qwen2.5vl &&
         echo 'Models ready.'
       "
