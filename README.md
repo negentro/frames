@@ -4,6 +4,16 @@ wireframes to webframes
 
 An agent-based frontend design tool that transforms wireframe images into working React + Tailwind CSS applications, with an iterative chat interface for refining the output.
 
+## Foreword
+
+Frames is an experiment in using agentic systems to develop frontend web applications using a local model architecture.
+
+The containerized service architecture draws from my experience building dockerized services and frontend applications at Progress Rail and MakeInfinite Labs. Hono + Wrangler was specifically chosen to simplify data service usage (local R2, D1 equivalents via miniflare). The agent architecture — specifically the orchestrator/subagent pattern, skill-based personas, and tool-calling conventions — was influenced by Claude Code and the Claude Agent SDK as of March 2026.
+
+The choice to use local models from the Qwen family is twofold: (1) to keep development and execution costs low, and (2) to experiment with composing non-multimodal, non-SOTA models to build agentic systems. This results in noticeable quality limitations: the model sometimes produces invalid CSS layouts, hallucinates UI content not present in the wireframe, and may require multiple iterations to achieve the desired result. This is a deliberate tradeoff.
+
+Claude Code was used as a development tool throughout this project — in part to evaluate its effectiveness for building and iterating on a codebase of this scope.
+
 ## Run Instructions
 
 ### Prerequisites
